@@ -1,5 +1,6 @@
 package com.mindshield.app.accessibility
 
+import android.animation.AnimatorSet
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
@@ -15,19 +16,19 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 
-private const val BREATH_DURATION_MS = 5_000L
 private const val TAG = "FrictionOverlay"
 
 /**
- * Draws a fullscreen overlay via WindowManager using TYPE_ACCESSIBILITY_OVERLAY.
- * Uses pure Android Views to avoid the ComposeView lifecycle-owner requirement
- * in a non-Activity context.
+ * Fullscreen pause overlay drawn via WindowManager TYPE_ACCESSIBILITY_OVERLAY.
  *
- * Shows a 5-second breath circle; "Open anyway" is locked until it completes.
+ * Shows a two-phase breathing animation (inhale → exhale) lasting [durationSeconds].
+ * "Open anyway" is fully hidden until the cycle completes, then fades in.
+ * "Go back" is always available.
  */
 class FrictionOverlay(
     private val context: Context,
     private val appName: String,
+    private val durationSeconds: Int,
     private val onOpenAnyway: () -> Unit,
     private val onGoBack: () -> Unit
 ) {
@@ -41,9 +42,7 @@ class FrictionOverlay(
         WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
         PixelFormat.TRANSLUCENT
-    ).apply {
-        gravity = Gravity.TOP or Gravity.START
-    }
+    ).apply { gravity = Gravity.TOP or Gravity.START }
 
     fun show() {
         mainHandler.post {
@@ -51,11 +50,10 @@ class FrictionOverlay(
             val view = buildView()
             try {
                 windowManager.addView(view, params)
-                rootView = view   // only set AFTER successful addView
-                Log.d(TAG, "Overlay added for $appName")
+                rootView = view
+                Log.d(TAG, "Overlay shown for $appName (${durationSeconds}s)")
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to add overlay for $appName", e)
-                // rootView stays null so the next show() attempt can retry
+                Log.e(TAG, "Failed to show overlay for $appName", e)
             }
         }
     }
@@ -69,134 +67,187 @@ class FrictionOverlay(
         }
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // View construction
+    // ─────────────────────────────────────────────────────────────────────────
+
     private fun buildView(): View {
-        val colorBackground = 0xFF_F8_F5_F2.toInt()   // warm off-white
-        val colorPrimary    = 0xFF_4C_AF_50.toInt()   // calm green
-        val colorOnPrimary  = 0xFF_FF_FF_FF.toInt()   // white
+        val d = context.resources.displayMetrics.density
+
+        // ── Colors ────────────────────────────────────────────────────────────
+        val bgColor      = 0xFF_0F_1A_2E.toInt()   // deep navy — calming
+        val primaryColor = 0xFF_5B_B8_F5.toInt()   // soft sky blue
+        val textPrimary  = 0xFF_E8_F4_FD.toInt()   // near-white
+        val textSecond   = 0xFF_8A_B4_D4.toInt()   // muted blue-grey
+        val btnColor     = 0xFF_5B_B8_F5.toInt()   // sky blue for Open anyway
+        val btnTextColor = 0xFF_0F_1A_2E.toInt()   // navy text on button
 
         val root = FrameLayout(context).apply {
-            setBackgroundColor(colorBackground)
+            setBackgroundColor(bgColor)
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         }
 
-        val density = context.resources.displayMetrics.density
-
         val container = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(
-                (32 * density).toInt(), (48 * density).toInt(),
-                (32 * density).toInt(), (48 * density).toInt()
-            )
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding((32 * d).toInt(), (56 * d).toInt(), (32 * d).toInt(), (48 * d).toInt())
         }
 
-        // ── Title ──────────────────────────────────────────────────────────────
-        val opening = TextView(context).apply {
+        // ── Header ────────────────────────────────────────────────────────────
+        val openingLabel = TextView(context).apply {
             text = "You're opening"
-            textSize = 16f
+            textSize = 15f
             gravity = Gravity.CENTER
-            setTextColor(0xFF_88_88_88.toInt())
+            setTextColor(textSecond)
         }
 
-        val appNameView = TextView(context).apply {
+        val appLabel = TextView(context).apply {
             text = appName
-            textSize = 24f
+            textSize = 26f
             gravity = Gravity.CENTER
-            setTextColor(0xFF_1A_1A_1A.toInt())
-            setPadding(0, (4 * density).toInt(), 0, 0)
+            setTextColor(textPrimary)
             setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(0, (4 * d).toInt(), 0, 0)
         }
 
-        val subtitle = TextView(context).apply {
-            text = "Take a breath first."
-            textSize = 14f
-            gravity = Gravity.CENTER
-            setTextColor(0xFF_88_88_88.toInt())
-            setPadding(0, (4 * density).toInt(), 0, (32 * density).toInt())
+        // ── Spacer ────────────────────────────────────────────────────────────
+        val spacerTop = View(context).apply {
+            layoutParams = LinearLayout.LayoutParams(1, 0, 1f)
         }
 
-        // ── Breath circle ──────────────────────────────────────────────────────
-        val circleSize = (220 * density).toInt()
-        val breathView = BreathCircleView(context, colorPrimary).apply {
+        // ── Breath circle + phase label ───────────────────────────────────────
+        val circleSize = (200 * d).toInt()
+        val breathView = BreathCircleView(context, primaryColor, textPrimary).apply {
             layoutParams = LinearLayout.LayoutParams(circleSize, circleSize)
         }
 
-        val spacer = View(context).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                (32 * density).toInt()
-            )
+        val phaseLabel = TextView(context).apply {
+            text = "Breathe in..."
+            textSize = 18f
+            gravity = Gravity.CENTER
+            setTextColor(primaryColor)
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(0, (16 * d).toInt(), 0, 0)
         }
 
-        // ── Buttons ────────────────────────────────────────────────────────────
+        // ── Spacer ────────────────────────────────────────────────────────────
+        val spacerBottom = View(context).apply {
+            layoutParams = LinearLayout.LayoutParams(1, 0, 1f)
+        }
+
+        // ── Buttons ───────────────────────────────────────────────────────────
+        val btnWidth = ViewGroup.LayoutParams.MATCH_PARENT
+
         val btnOpen = Button(context).apply {
             text = "Open anyway"
-            isEnabled = false
-            setBackgroundColor(colorPrimary)
-            setTextColor(colorOnPrimary)
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = (12 * density).toInt() }
-            setOnClickListener {
-                dismiss()
-                onOpenAnyway()
+            visibility = View.GONE     // hidden until cycle completes
+            alpha = 0f
+            setBackgroundColor(btnColor)
+            setTextColor(btnTextColor)
+            textSize = 16f
+            layoutParams = LinearLayout.LayoutParams(btnWidth, (48 * d).toInt()).apply {
+                bottomMargin = (12 * d).toInt()
             }
+            setOnClickListener { dismiss(); onOpenAnyway() }
         }
 
         val btnBack = Button(context).apply {
             text = "Go back"
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-            setOnClickListener {
-                dismiss()
-                onGoBack()
-            }
+            setBackgroundColor(0x33_FF_FF_FF.toInt())   // subtle white tint
+            setTextColor(textPrimary)
+            textSize = 16f
+            layoutParams = LinearLayout.LayoutParams(btnWidth, (48 * d).toInt())
+            setOnClickListener { dismiss(); onGoBack() }
         }
 
-        container.addView(opening)
-        container.addView(appNameView)
-        container.addView(subtitle)
+        container.addView(openingLabel)
+        container.addView(appLabel)
+        container.addView(spacerTop)
         container.addView(breathView)
-        container.addView(spacer)
+        container.addView(phaseLabel)
+        container.addView(spacerBottom)
         container.addView(btnOpen)
         container.addView(btnBack)
         root.addView(container)
 
-        // Start animation — unlock button when done
-        breathView.startBreath(BREATH_DURATION_MS) {
-            mainHandler.post { btnOpen.isEnabled = true }
+        // ── Start animation ───────────────────────────────────────────────────
+        val halfMs = durationSeconds * 500L   // half the total in ms
+
+        val inhale = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = halfMs
+            interpolator = AccelerateDecelerateInterpolator()
+            addUpdateListener { anim ->
+                breathView.setProgress(anim.animatedValue as Float, Phase.INHALE)
+                phaseLabel.text = "Breathe in..."
+            }
         }
+
+        val exhale = ValueAnimator.ofFloat(1f, 0f).apply {
+            duration = halfMs
+            interpolator = AccelerateDecelerateInterpolator()
+            addUpdateListener { anim ->
+                breathView.setProgress(anim.animatedValue as Float, Phase.EXHALE)
+                phaseLabel.text = "Breathe out..."
+            }
+        }
+
+        AnimatorSet().apply {
+            playSequentially(inhale, exhale)
+            start()
+        }
+
+        // Reveal "Open anyway" after the full cycle
+        exhale.addListener(object : android.animation.AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: android.animation.Animator) {
+                mainHandler.post {
+                    phaseLabel.text = "Take your time."
+                    btnOpen.visibility = View.VISIBLE
+                    btnOpen.animate().alpha(1f).setDuration(400).start()
+                }
+            }
+        })
 
         return root
     }
-
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Custom view: animating breath circle
+// Breath phase
 // ─────────────────────────────────────────────────────────────────────────────
 
-private class BreathCircleView(context: Context, private val color: Int) : View(context) {
+private enum class Phase { INHALE, EXHALE }
 
-    private var progress = 0f   // 0..1
-    private var onDone: (() -> Unit)? = null
+// ─────────────────────────────────────────────────────────────────────────────
+// Custom breath view
+// ─────────────────────────────────────────────────────────────────────────────
 
-    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
-    }
-    private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+private class BreathCircleView(
+    context: Context,
+    private val circleColor: Int,
+    private val textColor: Int
+) : View(context) {
+
+    private var scale = 0f
+    private var phase = Phase.INHALE
+
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = 3f * resources.displayMetrics.density
+        strokeWidth = 2.5f * resources.displayMetrics.density
     }
-    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textAlign = Paint.Align.CENTER
-        textSize = 16f * resources.displayMetrics.density
+    // Outer glow ring (larger, very transparent)
+    private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 12f * resources.displayMetrics.density
+    }
+
+    fun setProgress(value: Float, p: Phase) {
+        scale = value
+        phase = p
+        invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -204,34 +255,28 @@ private class BreathCircleView(context: Context, private val color: Int) : View(
         val cy = height / 2f
         val maxR = minOf(width, height) / 2f
 
-        val scale = 0.6f + progress * 0.4f
-        val r = maxR * scale
+        // Circle scales from 25% to 100%
+        val r = maxR * (0.25f + scale * 0.75f)
 
-        val alpha = (0xFF * 0.15f).toInt()
-        fillPaint.color = (color and 0x00FFFFFF) or (alpha shl 24)
+        // Alpha: brighter when fully inhaled
+        val fillAlpha = (0.10f + scale * 0.12f)
+        val ringAlpha = (0.50f + scale * 0.45f)
+        val glowAlpha = scale * 0.18f
+
+        fillPaint.color = withAlpha(circleColor, fillAlpha)
+        ringPaint.color = withAlpha(circleColor, ringAlpha)
+        glowPaint.color = withAlpha(circleColor, glowAlpha)
+
+        // Glow (outer, only visible when expanded)
+        if (glowAlpha > 0.01f) {
+            canvas.drawCircle(cx, cy, r + 20f * resources.displayMetrics.density, glowPaint)
+        }
         canvas.drawCircle(cx, cy, r, fillPaint)
-
-        strokePaint.color = (color and 0x00FFFFFF) or (0x99 shl 24)
-        canvas.drawCircle(cx, cy, r, strokePaint)
-
-        val label = if (progress >= 1f) "✓" else "breathe"
-        textPaint.color = color
-        textPaint.textSize = if (progress >= 1f) 32f * resources.displayMetrics.density
-                             else 16f * resources.displayMetrics.density
-        canvas.drawText(label, cx, cy - (textPaint.ascent() + textPaint.descent()) / 2f, textPaint)
+        canvas.drawCircle(cx, cy, r, ringPaint)
     }
 
-    fun startBreath(durationMs: Long, onComplete: () -> Unit) {
-        onDone = onComplete
-        ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = durationMs
-            interpolator = AccelerateDecelerateInterpolator()
-            addUpdateListener { anim ->
-                progress = anim.animatedValue as Float
-                invalidate()
-                if (progress >= 1f) onDone?.also { onDone = null }?.invoke()
-            }
-            start()
-        }
+    private fun withAlpha(color: Int, alpha: Float): Int {
+        val a = (alpha.coerceIn(0f, 1f) * 255).toInt()
+        return (color and 0x00FFFFFF) or (a shl 24)
     }
 }

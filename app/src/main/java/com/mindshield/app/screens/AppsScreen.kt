@@ -4,15 +4,12 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Warning
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,28 +18,118 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.eventFlow
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.mindshield.app.data.AppFrictionStore
 import com.mindshield.app.data.FrictionMode
 import com.mindshield.app.data.IntentType
 import com.mindshield.app.util.AccessibilityServiceStatus
 import com.mindshield.app.viewmodel.AppEntry
 import com.mindshield.app.viewmodel.AppsViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.withContext
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Root
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 fun AppsScreen() {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    // Re-check service status whenever the screen resumes (e.g. user returns
+    // from Android Accessibility settings after enabling the service).
+    var serviceEnabled by remember { mutableStateOf(AccessibilityServiceStatus.isEnabled(context)) }
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.eventFlow
+            .filterIsInstance<Lifecycle.Event>()
+            .collect { event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    serviceEnabled = AccessibilityServiceStatus.isEnabled(context)
+                }
+            }
+    }
+
+    if (!serviceEnabled) {
+        AccessibilityPermissionGate(
+            onOpenSettings = {
+                context.startActivity(
+                    android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                )
+            }
+        )
+    } else {
+        AppListContent()
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Permission gate — shown when accessibility service is not enabled
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun AccessibilityPermissionGate(onOpenSettings: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Accessibility,
+            contentDescription = null,
+            modifier = Modifier.size(72.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+        Spacer(Modifier.height(24.dp))
+        Text(
+            text = "Accessibility service required",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = "MindShield needs the Accessibility service to detect when you open an app and show the friction overlay. Your data never leaves your device.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "In Accessibility settings, find MindShield and toggle it on.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(32.dp))
+        Button(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Outlined.OpenInNew, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("Open Accessibility settings")
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main content — visible once the service is enabled
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun AppListContent() {
     val vm: AppsViewModel = viewModel()
     val apps by vm.apps.collectAsStateWithLifecycle()
     val query by vm.searchQuery.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-
-    // Check service status on every composition so the banner updates if the
-    // user enables/disables the service while this screen is visible.
-    val serviceEnabled = remember { AccessibilityServiceStatus.isEnabled(context) }
+    val pauseDuration by vm.pauseDuration.collectAsStateWithLifecycle()
 
     Column(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
@@ -58,12 +145,17 @@ fun AppsScreen() {
             )
         }
 
-        // ── Service status banner ─────────────────────────────────────────────
-        if (!serviceEnabled) {
-            ServiceStatusBanner()
-        }
+        HorizontalDivider()
 
-        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        // ── Duration selector ─────────────────────────────────────────────────
+        DurationSelector(
+            currentSeconds = pauseDuration,
+            onSelect = vm::setPauseDuration
+        )
+
+        HorizontalDivider()
+
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             OutlinedTextField(
                 value = query,
                 onValueChange = vm::onSearchQueryChanged,
@@ -72,7 +164,6 @@ fun AppsScreen() {
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
-            Spacer(Modifier.height(4.dp))
         }
 
         HorizontalDivider()
@@ -87,7 +178,7 @@ fun AppsScreen() {
                     AppRow(
                         app = app,
                         onModeSelected = { vm.setMode(app.packageName, it) },
-                        onToggleIntent = { type, enabled ->
+                        onToggleIntent  = { type, enabled ->
                             vm.setSmartIntent(app.packageName, type, enabled)
                         }
                     )
@@ -99,53 +190,108 @@ fun AppsScreen() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Service status banner
+// Duration selector
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun ServiceStatusBanner() {
-    val context = LocalContext.current
-    Surface(
-        color = MaterialTheme.colorScheme.errorContainer,
-        modifier = Modifier.fillMaxWidth()
-    ) {
+private fun DurationSelector(currentSeconds: Int, onSelect: (Int) -> Unit) {
+    var showCustomDialog by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Text(
+            text = "Pause duration",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
         Row(
-            modifier = Modifier
-                .clickable {
-                    // Open Accessibility settings so the user can enable the service
-                    context.startActivity(
-                        android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                    )
-                }
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Icon(
-                Icons.Outlined.Warning,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onErrorContainer
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Accessibility service not enabled",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = "Friction overlays won't work until you enable MindShield in Accessibility settings. Tap here to open them.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onErrorContainer
+            AppFrictionStore.PRESET_DURATIONS.forEach { secs ->
+                FilterChip(
+                    selected = currentSeconds == secs && secs in AppFrictionStore.PRESET_DURATIONS,
+                    onClick  = { onSelect(secs) },
+                    label    = { Text("${secs}s") }
                 )
             }
-            Icon(
-                Icons.Outlined.Settings,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onErrorContainer
+            // Custom chip
+            val isCustom = currentSeconds !in AppFrictionStore.PRESET_DURATIONS
+            FilterChip(
+                selected = isCustom,
+                onClick  = { showCustomDialog = true },
+                label    = { Text(if (isCustom) "${currentSeconds}s ✎" else "Custom") }
             )
         }
     }
+
+    if (showCustomDialog) {
+        CustomDurationDialog(
+            current = currentSeconds,
+            onDismiss = { showCustomDialog = false },
+            onConfirm = { secs ->
+                onSelect(secs)
+                showCustomDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun CustomDurationDialog(
+    current: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit
+) {
+    var sliderValue by remember {
+        mutableFloatStateOf(
+            current.coerceIn(AppFrictionStore.MIN_DURATION, AppFrictionStore.MAX_DURATION).toFloat()
+        )
+    }
+    val seconds = sliderValue.toInt()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Custom pause duration") },
+        text = {
+            Column {
+                Text(
+                    text = "$seconds seconds",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+                Spacer(Modifier.height(8.dp))
+                Slider(
+                    value = sliderValue,
+                    onValueChange = { sliderValue = it },
+                    valueRange = AppFrictionStore.MIN_DURATION.toFloat()..AppFrictionStore.MAX_DURATION.toFloat(),
+                    steps = AppFrictionStore.MAX_DURATION - AppFrictionStore.MIN_DURATION - 1
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        "${AppFrictionStore.MIN_DURATION}s",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "${AppFrictionStore.MAX_DURATION}s",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(seconds) }) { Text("Set") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -175,7 +321,6 @@ private fun AppRow(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        // ── App identity ──────────────────────────────────────────────────────
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.size(44.dp), contentAlignment = Alignment.Center) {
                 if (icon != null) {
@@ -194,13 +339,12 @@ private fun AppRow(
 
         Spacer(Modifier.height(10.dp))
 
-        // ── Mode selector ─────────────────────────────────────────────────────
         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
             FrictionMode.entries.forEachIndexed { index, mode ->
                 SegmentedButton(
                     shape = SegmentedButtonDefaults.itemShape(index, FrictionMode.entries.size),
                     selected = app.frictionMode == mode,
-                    onClick = { onModeSelected(mode) },
+                    onClick  = { onModeSelected(mode) },
                     label = {
                         Text(
                             when (mode) {
@@ -222,7 +366,6 @@ private fun AppRow(
             }
         }
 
-        // ── Smart session chips ───────────────────────────────────────────────
         AnimatedVisibility(
             visible = app.frictionMode == FrictionMode.SMART,
             enter = expandVertically(),
@@ -237,10 +380,7 @@ private fun AppRow(
                     modifier = Modifier.padding(start = 4.dp)
                 )
                 Spacer(Modifier.height(6.dp))
-                SessionChipRow(
-                    selectedIntents = app.smartIntents,
-                    onToggle = onToggleIntent
-                )
+                SessionChipRow(app.smartIntents, onToggleIntent)
             }
         }
     }

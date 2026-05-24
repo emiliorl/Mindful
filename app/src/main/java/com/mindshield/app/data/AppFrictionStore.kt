@@ -40,17 +40,33 @@ data class AppFrictionConfig(
  */
 object AppFrictionStore {
 
-    private const val PREFS_NAME   = "app_friction_store"
-    private const val MODE_PREFIX  = "mode:"
+    private const val PREFS_NAME    = "app_friction_store"
+    private const val MODE_PREFIX   = "mode:"
     private const val INTENT_PREFIX = "intents:"
+    private const val KEY_DURATION  = "pause_duration_seconds"
+
+    val PRESET_DURATIONS = listOf(3, 5, 6, 10)
+    const val DEFAULT_DURATION = 6
+    const val MIN_DURATION = 3
+    const val MAX_DURATION = 60
 
     private val _configs = MutableStateFlow<Map<String, AppFrictionConfig>>(emptyMap())
     val configs: StateFlow<Map<String, AppFrictionConfig>> = _configs
+
+    private val _pauseDuration = MutableStateFlow(DEFAULT_DURATION)
+    val pauseDuration: StateFlow<Int> = _pauseDuration
 
     // ── Init ─────────────────────────────────────────────────────────────────
 
     fun init(context: Context) {
         _configs.value = loadAll(context)
+        _pauseDuration.value = prefs(context).getInt(KEY_DURATION, DEFAULT_DURATION)
+    }
+
+    fun setPauseDuration(context: Context, seconds: Int) {
+        val clamped = seconds.coerceIn(MIN_DURATION, MAX_DURATION)
+        _pauseDuration.value = clamped
+        prefs(context).edit().putInt(KEY_DURATION, clamped).apply()
     }
 
     // ── Reads ─────────────────────────────────────────────────────────────────

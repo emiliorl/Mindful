@@ -41,6 +41,7 @@ class MindShieldAccessibilityService : AccessibilityService() {
         activeOverlay = FrictionOverlay(
             context = this,
             appName = appLabel(pkg),
+            durationSeconds = AppFrictionStore.pauseDuration.value,
             onOpenAnyway = {
                 Log.d(TAG, "User opened $pkg anyway")
                 bypassPackage = pkg

@@ -55,6 +55,12 @@ class AppsViewModel(app: Application) : AndroidViewModel(app) {
         AppFrictionStore.setSmartIntent(getApplication(), packageName, type, enabled)
     }
 
+    val pauseDuration: StateFlow<Int> = AppFrictionStore.pauseDuration
+
+    fun setPauseDuration(seconds: Int) {
+        AppFrictionStore.setPauseDuration(getApplication(), seconds)
+    }
+
     fun onSearchQueryChanged(query: String) {
         _searchQuery.value = query
     }
