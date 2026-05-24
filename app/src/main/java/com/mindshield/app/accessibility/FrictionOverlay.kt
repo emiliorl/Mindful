@@ -7,6 +7,7 @@ import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.*
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.Button
@@ -15,6 +16,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 
 private const val BREATH_DURATION_MS = 5_000L
+private const val TAG = "FrictionOverlay"
 
 /**
  * Draws a fullscreen overlay via WindowManager using TYPE_ACCESSIBILITY_OVERLAY.
@@ -46,10 +48,15 @@ class FrictionOverlay(
     fun show() {
         mainHandler.post {
             if (rootView != null) return@post
-
             val view = buildView()
-            rootView = view
-            windowManager.addView(view, params)
+            try {
+                windowManager.addView(view, params)
+                rootView = view   // only set AFTER successful addView
+                Log.d(TAG, "Overlay added for $appName")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to add overlay for $appName", e)
+                // rootView stays null so the next show() attempt can retry
+            }
         }
     }
 

@@ -2,46 +2,39 @@ package com.mindshield.app.accessibility
 
 import android.accessibilityservice.AccessibilityService
 import android.content.pm.PackageManager
+import android.util.Log
 import android.view.accessibility.AccessibilityEvent
-import com.mindshield.app.data.FrictionBlocklist
-import com.mindshield.app.data.IntentFrictionRules
+import com.mindshield.app.data.AppFrictionStore
 
 class MindShieldAccessibilityService : AccessibilityService() {
 
     private var activeOverlay: FrictionOverlay? = null
-    private var overlayPackage: String? = null      // package the current overlay is for
-    private var bypassPackage: String? = null       // package allowed through after "Open anyway"
+    private var overlayPackage: String? = null   // package the visible overlay belongs to
+    private var bypassPackage: String? = null    // allowed through after "Open anyway"
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
 
         // Never intercept our own app
-        if (pkg == packageName) {
-            clearBypass()
-            return
-        }
+        if (pkg == packageName) { bypassPackage = null; return }
 
-        // User already tapped "Open anyway" for this package — let them in
+        // User tapped "Open anyway" for this exact package — let it through
         if (pkg == bypassPackage) return
 
-        // Navigated away from bypass app — clear bypass
+        // A different app came to front — clear any stale bypass
         if (pkg != bypassPackage) bypassPackage = null
 
-        // Overlay already visible for this exact package — don't re-trigger
-        // (apps fire multiple TYPE_WINDOW_STATE_CHANGED on launch)
+        // Overlay already visible for this package — don't re-trigger on
+        // duplicate events (apps fire multiple TYPE_WINDOW_STATE_CHANGED on launch)
         if (pkg == overlayPackage && activeOverlay != null) return
 
-        val shouldFriction = FrictionBlocklist.isBlocked(pkg) ||
-                IntentFrictionRules.isBlockedForCurrentSession(pkg)
-
-        if (!shouldFriction) {
-            // Different non-friction app came to front — dismiss any stale overlay
+        if (!AppFrictionStore.shouldFriction(pkg)) {
             if (pkg != overlayPackage) dismissOverlay()
             return
         }
 
-        // Show overlay for this package
+        Log.d(TAG, "Showing friction overlay for $pkg")
         dismissOverlay()
         overlayPackage = pkg
 
@@ -49,11 +42,13 @@ class MindShieldAccessibilityService : AccessibilityService() {
             context = this,
             appName = appLabel(pkg),
             onOpenAnyway = {
+                Log.d(TAG, "User opened $pkg anyway")
                 bypassPackage = pkg
                 activeOverlay = null
                 overlayPackage = null
             },
             onGoBack = {
+                Log.d(TAG, "User went back from $pkg")
                 performGlobalAction(GLOBAL_ACTION_BACK)
                 activeOverlay = null
                 overlayPackage = null
@@ -74,14 +69,14 @@ class MindShieldAccessibilityService : AccessibilityService() {
         overlayPackage = null
     }
 
-    private fun clearBypass() {
-        bypassPackage = null
-    }
-
     private fun appLabel(pkg: String): String =
         runCatching {
             packageManager
                 .getApplicationInfo(pkg, PackageManager.GET_META_DATA)
                 .let { packageManager.getApplicationLabel(it).toString() }
         }.getOrDefault(pkg)
+
+    companion object {
+        private const val TAG = "MindShieldA11y"
+    }
 }

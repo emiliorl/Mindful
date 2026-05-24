@@ -4,12 +4,15 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,10 +25,11 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.mindshield.app.data.FrictionMode
 import com.mindshield.app.data.IntentType
+import com.mindshield.app.util.AccessibilityServiceStatus
 import com.mindshield.app.viewmodel.AppEntry
 import com.mindshield.app.viewmodel.AppsViewModel
-import com.mindshield.app.viewmodel.FrictionMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -34,6 +38,11 @@ fun AppsScreen() {
     val vm: AppsViewModel = viewModel()
     val apps by vm.apps.collectAsStateWithLifecycle()
     val query by vm.searchQuery.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // Check service status on every composition so the banner updates if the
+    // user enables/disables the service while this screen is visible.
+    val serviceEnabled = remember { AccessibilityServiceStatus.isEnabled(context) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
@@ -47,7 +56,14 @@ fun AppsScreen() {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(Modifier.height(12.dp))
+        }
+
+        // ── Service status banner ─────────────────────────────────────────────
+        if (!serviceEnabled) {
+            ServiceStatusBanner()
+        }
+
+        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
             OutlinedTextField(
                 value = query,
                 onValueChange = vm::onSearchQueryChanged,
@@ -56,6 +72,7 @@ fun AppsScreen() {
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
+            Spacer(Modifier.height(4.dp))
         }
 
         HorizontalDivider()
@@ -71,12 +88,62 @@ fun AppsScreen() {
                         app = app,
                         onModeSelected = { vm.setMode(app.packageName, it) },
                         onToggleIntent = { type, enabled ->
-                            vm.setIntentRule(app.packageName, type, enabled)
+                            vm.setSmartIntent(app.packageName, type, enabled)
                         }
                     )
                     HorizontalDivider(modifier = Modifier.padding(start = 72.dp))
                 }
             }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Service status banner
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun ServiceStatusBanner() {
+    val context = LocalContext.current
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .clickable {
+                    // Open Accessibility settings so the user can enable the service
+                    context.startActivity(
+                        android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                    )
+                }
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Outlined.Warning,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Accessibility service not enabled",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "Friction overlays won't work until you enable MindShield in Accessibility settings. Tap here to open them.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+            Icon(
+                Icons.Outlined.Settings,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onErrorContainer
+            )
         }
     }
 }
@@ -108,15 +175,11 @@ private fun AppRow(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        // ── App identity row ──────────────────────────────────────────────────
+        // ── App identity ──────────────────────────────────────────────────────
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.size(44.dp), contentAlignment = Alignment.Center) {
                 if (icon != null) {
-                    Image(
-                        bitmap = icon!!,
-                        contentDescription = null,
-                        modifier = Modifier.size(40.dp)
-                    )
+                    Image(bitmap = icon!!, contentDescription = null, modifier = Modifier.size(40.dp))
                 } else {
                     Surface(
                         modifier = Modifier.size(40.dp),
@@ -126,11 +189,7 @@ private fun AppRow(
                 }
             }
             Spacer(Modifier.width(12.dp))
-            Text(
-                text = app.label,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f)
-            )
+            Text(app.label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
         }
 
         Spacer(Modifier.height(10.dp))
@@ -139,15 +198,12 @@ private fun AppRow(
         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
             FrictionMode.entries.forEachIndexed { index, mode ->
                 SegmentedButton(
-                    shape = SegmentedButtonDefaults.itemShape(
-                        index = index,
-                        count = FrictionMode.entries.size
-                    ),
+                    shape = SegmentedButtonDefaults.itemShape(index, FrictionMode.entries.size),
                     selected = app.frictionMode == mode,
-                    onClick  = { onModeSelected(mode) },
+                    onClick = { onModeSelected(mode) },
                     label = {
                         Text(
-                            text = when (mode) {
+                            when (mode) {
                                 FrictionMode.OFF    -> "Off"
                                 FrictionMode.ALWAYS -> "Always"
                                 FrictionMode.SMART  -> "Smart"
@@ -156,19 +212,17 @@ private fun AppRow(
                         )
                     },
                     icon = {
-                        Text(
-                            text = when (mode) {
-                                FrictionMode.OFF    -> "○"
-                                FrictionMode.ALWAYS -> "🔒"
-                                FrictionMode.SMART  -> "🎯"
-                            }
-                        )
+                        Text(when (mode) {
+                            FrictionMode.OFF    -> "○"
+                            FrictionMode.ALWAYS -> "🔒"
+                            FrictionMode.SMART  -> "🎯"
+                        })
                     }
                 )
             }
         }
 
-        // ── Session chips — only visible in Smart mode ─────────────────────────
+        // ── Smart session chips ───────────────────────────────────────────────
         AnimatedVisibility(
             visible = app.frictionMode == FrictionMode.SMART,
             enter = expandVertically(),
@@ -184,7 +238,7 @@ private fun AppRow(
                 )
                 Spacer(Modifier.height(6.dp))
                 SessionChipRow(
-                    selectedIntents = app.frictionIntents,
+                    selectedIntents = app.smartIntents,
                     onToggle = onToggleIntent
                 )
             }
@@ -202,15 +256,16 @@ private fun SessionChipRow(
     selectedIntents: Set<IntentType>,
     onToggle: (IntentType, Boolean) -> Unit
 ) {
-    val types = IntentType.entries.filter { it != IntentType.JUST_LOOKING }
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        types.forEach { type ->
-            val selected = type in selectedIntents
-            FilterChip(
-                selected = selected,
-                onClick  = { onToggle(type, !selected) },
-                label    = { Text("${type.emoji} ${type.label}") }
-            )
-        }
+        IntentType.entries
+            .filter { it != IntentType.JUST_LOOKING }
+            .forEach { type ->
+                val selected = type in selectedIntents
+                FilterChip(
+                    selected = selected,
+                    onClick  = { onToggle(type, !selected) },
+                    label    = { Text("${type.emoji} ${type.label}") }
+                )
+            }
     }
 }
