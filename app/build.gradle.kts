@@ -56,6 +56,10 @@ dependencies {
 
     // Lifecycle + ViewModel for Compose
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+
+    // SavedState — required to host ComposeView outside an Activity (e.g. overlay)
+    implementation("androidx.savedstate:savedstate-ktx:1.2.1")
 
     // Coroutines (StateFlow in ZoneManagerService)
     implementation(libs.kotlinx.coroutines.android)

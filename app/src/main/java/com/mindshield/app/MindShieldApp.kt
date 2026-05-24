@@ -4,12 +4,14 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
+import com.mindshield.app.data.FrictionBlocklist
 
 class MindShieldApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannels()
+        FrictionBlocklist.init(this)
     }
 
     private fun createNotificationChannels() {

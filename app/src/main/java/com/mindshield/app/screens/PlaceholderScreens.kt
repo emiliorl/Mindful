@@ -10,19 +10,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Phase 0 placeholders — replaced per phase (HomeScreen moved to HomeScreen.kt)
+// Phase 0 placeholders — replaced per phase
+// HomeScreen  → screens/HomeScreen.kt (Phase 1)
+// AppsScreen  → screens/AppsScreen.kt (Phase 2)
 // ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Apps screen — Phase 2 will add the friction-toggle list.
- */
-@Composable
-fun AppsScreen() {
-    PlaceholderScreen(
-        title = "Apps",
-        subtitle = "Toggle friction for specific apps here.\n(Phase 2 — coming up)"
-    )
-}
 
 /**
  * Notifications screen — Phase 3 will add batching controls.
