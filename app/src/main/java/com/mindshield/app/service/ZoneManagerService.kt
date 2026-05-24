@@ -15,6 +15,8 @@ import com.mindshield.app.data.IntentSession
 import com.mindshield.app.data.IntentType
 import com.mindshield.app.data.RoutinePhase
 import com.mindshield.app.data.SessionStore
+import com.mindshield.app.data.AppDatabase
+import com.mindshield.app.data.CompletedSession
 import com.mindshield.app.notification.BatchDeliveryHelper
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -63,13 +65,42 @@ class ZoneManagerService : Service() {
             ACTION_START -> {
                 val typeName = intent.getStringExtra(EXTRA_INTENT) ?: IntentType.JUST_LOOKING.name
                 val type = runCatching { IntentType.valueOf(typeName) }.getOrDefault(IntentType.JUST_LOOKING)
-                val session = IntentSession(type, System.currentTimeMillis())
+                val now = System.currentTimeMillis()
+                // Persist the session that's ending before we overwrite state
+                _sessionState.value?.let { prev ->
+                    val ctx = this
+                    CoroutineScope(Dispatchers.IO).launch {
+                        AppDatabase.get(ctx).completedSessionDao().insert(
+                            CompletedSession(
+                                intentType = prev.type.name,
+                                startMs    = prev.startTimeMs,
+                                endMs      = now,
+                                durationMs = now - prev.startTimeMs
+                            )
+                        )
+                    }
+                }
+                val session = IntentSession(type, now)
                 _sessionState.value = session
                 SessionStore.save(this, session)
                 startForeground(NOTIFICATION_ID, buildNotification())
                 updateNotification()
             }
             ACTION_STOP -> {
+                val now = System.currentTimeMillis()
+                _sessionState.value?.let { prev ->
+                    val ctx = this
+                    CoroutineScope(Dispatchers.IO).launch {
+                        AppDatabase.get(ctx).completedSessionDao().insert(
+                            CompletedSession(
+                                intentType = prev.type.name,
+                                startMs    = prev.startTimeMs,
+                                endMs      = now,
+                                durationMs = now - prev.startTimeMs
+                            )
+                        )
+                    }
+                }
                 _sessionState.value = null
                 SessionStore.clear(this)
                 // Deliver any held notifications when the session ends

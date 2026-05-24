@@ -19,6 +19,7 @@ import com.mindshield.app.screens.HomeScreen
 import com.mindshield.app.screens.IntentPickerScreen
 import com.mindshield.app.screens.NotificationsScreen
 import com.mindshield.app.screens.RoutinesScreen
+import com.mindshield.app.screens.StatsScreen
 import com.mindshield.app.service.ZoneManagerService
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -30,6 +31,7 @@ private object Routes {
     const val HOME          = "home"
     const val APPS          = "apps"
     const val NOTIFICATIONS = "notifications"
+    const val STATS         = "stats"
     const val ROUTINES      = "routines"
 }
 
@@ -41,10 +43,11 @@ private sealed class Tab(
     object Home          : Tab(Routes.HOME,          "Home",    Icons.Outlined.Home)
     object Apps          : Tab(Routes.APPS,          "Apps",    Icons.Outlined.Apps)
     object Notifications : Tab(Routes.NOTIFICATIONS, "Silence", Icons.Outlined.NotificationsOff)
+    object Stats         : Tab(Routes.STATS,         "Stats",   Icons.Outlined.BarChart)
     object Routines      : Tab(Routes.ROUTINES,      "Routines",Icons.Outlined.WbTwilight)
 
     companion object {
-        val all = listOf(Home, Apps, Notifications, Routines)
+        val all = listOf(Home, Apps, Notifications, Stats, Routines)
     }
 }
 
@@ -116,6 +119,7 @@ fun AppShell() {
             }
             composable(Routes.APPS)          { AppsScreen() }
             composable(Routes.NOTIFICATIONS) { NotificationsScreen() }
+            composable(Routes.STATS)         { StatsScreen() }
             composable(Routes.ROUTINES)      { RoutinesScreen() }
         }
     }

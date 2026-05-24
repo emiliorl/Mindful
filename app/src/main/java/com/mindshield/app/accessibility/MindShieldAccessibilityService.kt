@@ -4,10 +4,15 @@ import android.accessibilityservice.AccessibilityService
 import android.content.pm.PackageManager
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
+import com.mindshield.app.data.AppDatabase
 import com.mindshield.app.data.AppFrictionStore
+import com.mindshield.app.data.FrictionEvent
 import com.mindshield.app.data.FrictionMode
 import com.mindshield.app.data.RoutinePhase
 import com.mindshield.app.service.ZoneManagerService
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class MindShieldAccessibilityService : AccessibilityService() {
 
@@ -57,19 +62,22 @@ class MindShieldAccessibilityService : AccessibilityService() {
         dismissOverlay()
         overlayPackage = pkg
 
+        val label = appLabel(pkg)
         activeOverlay = FrictionOverlay(
             context = this,
-            appName = appLabel(pkg),
+            appName = label,
             durationSeconds = duration,
             isSleepBlock = isSleepBlock,
             onOpenAnyway = {
                 Log.d(TAG, "User opened $pkg anyway (phase=$routinePhase)")
+                logFrictionEvent(pkg, label, FrictionEvent.OUTCOME_OPENED)
                 bypassPackage = pkg
                 activeOverlay = null
                 overlayPackage = null
             },
             onGoBack = {
                 Log.d(TAG, "User went back from $pkg")
+                logFrictionEvent(pkg, label, FrictionEvent.OUTCOME_WENT_BACK)
                 backSuppressedPackage = pkg
                 activeOverlay = null
                 overlayPackage = null
@@ -89,6 +97,19 @@ class MindShieldAccessibilityService : AccessibilityService() {
         activeOverlay?.dismiss()
         activeOverlay = null
         overlayPackage = null
+    }
+
+    private fun logFrictionEvent(pkg: String, label: String, outcome: String) {
+        CoroutineScope(Dispatchers.IO).launch {
+            AppDatabase.get(applicationContext).frictionEventDao().insert(
+                FrictionEvent(
+                    packageName = pkg,
+                    appLabel    = label,
+                    timestampMs = System.currentTimeMillis(),
+                    outcome     = outcome
+                )
+            )
+        }
     }
 
     private fun appLabel(pkg: String): String =

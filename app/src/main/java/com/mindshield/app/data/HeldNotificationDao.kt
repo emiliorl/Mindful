@@ -34,6 +34,11 @@ interface HeldNotificationDao {
     @Query("UPDATE held_notifications SET status = 'DELIVERED', deliveredAtMs = :ts WHERE status = 'QUEUED' AND packageName = :pkg")
     suspend fun markPackageDelivered(pkg: String, ts: Long)
 
+    // ── Stats queries ──────────────────────────────────────────────────────────
+
+    @Query("SELECT COUNT(*) FROM held_notifications WHERE deliveredAtMs >= :fromMs AND deliveredAtMs <= :toMs")
+    fun countDeliveredBetween(fromMs: Long, toMs: Long): kotlinx.coroutines.flow.Flow<Int>
+
     // ── Cleanup ────────────────────────────────────────────────────────────────
 
     @Query("DELETE FROM held_notifications WHERE status = 'DELIVERED' AND deliveredAtMs < :olderThan")

@@ -8,14 +8,16 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [HeldNotification::class, RoutineCompletion::class],
-    version = 3,
+    entities = [HeldNotification::class, RoutineCompletion::class, CompletedSession::class, FrictionEvent::class],
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun heldNotificationDao(): HeldNotificationDao
     abstract fun routineCompletionDao(): RoutineCompletionDao
+    abstract fun completedSessionDao(): CompletedSessionDao
+    abstract fun frictionEventDao(): FrictionEventDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
@@ -27,7 +29,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "mindshield.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                     .also { INSTANCE = it }
             }
@@ -47,6 +49,29 @@ abstract class AppDatabase : RoomDatabase() {
                         type TEXT NOT NULL,
                         dateStr TEXT NOT NULL,
                         completedAtMs INTEGER NOT NULL
+                    )"""
+                )
+            }
+        }
+
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS completed_sessions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        intentType TEXT NOT NULL,
+                        startMs INTEGER NOT NULL,
+                        endMs INTEGER NOT NULL,
+                        durationMs INTEGER NOT NULL
+                    )"""
+                )
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS friction_events (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        packageName TEXT NOT NULL,
+                        appLabel TEXT NOT NULL,
+                        timestampMs INTEGER NOT NULL,
+                        outcome TEXT NOT NULL
                     )"""
                 )
             }
