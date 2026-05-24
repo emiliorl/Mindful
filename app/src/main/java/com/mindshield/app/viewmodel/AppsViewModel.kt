@@ -1,11 +1,12 @@
 package com.mindshield.app.viewmodel
 
 import android.app.Application
-import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.mindshield.app.data.FrictionBlocklist
+import com.mindshield.app.data.IntentFrictionRules
+import com.mindshield.app.data.IntentType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -13,7 +14,8 @@ import kotlinx.coroutines.launch
 data class AppEntry(
     val packageName: String,
     val label: String,
-    val isFrictionEnabled: Boolean
+    val isFrictionEnabled: Boolean,
+    val frictionIntents: Set<IntentType> = emptySet()
 )
 
 class AppsViewModel(app: Application) : AndroidViewModel(app) {
@@ -28,10 +30,15 @@ class AppsViewModel(app: Application) : AndroidViewModel(app) {
     val apps: StateFlow<List<AppEntry>> = combine(
         _allApps,
         FrictionBlocklist.blockedPackages,
+        IntentFrictionRules.rules,
         _searchQuery
-    ) { all, blocked, query ->
-        all.map { it.copy(isFrictionEnabled = it.packageName in blocked) }
-            .filter { query.isBlank() || it.label.contains(query, ignoreCase = true) }
+    ) { all, blocked, rules, query ->
+        all.map { entry ->
+            entry.copy(
+                isFrictionEnabled = entry.packageName in blocked,
+                frictionIntents   = rules[entry.packageName] ?: emptySet()
+            )
+        }.filter { query.isBlank() || it.label.contains(query, ignoreCase = true) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     init {
@@ -44,6 +51,10 @@ class AppsViewModel(app: Application) : AndroidViewModel(app) {
         FrictionBlocklist.setBlocked(getApplication(), packageName, enabled)
     }
 
+    fun setIntentRule(packageName: String, type: IntentType, enabled: Boolean) {
+        IntentFrictionRules.setRule(getApplication(), packageName, type, enabled)
+    }
+
     fun onSearchQueryChanged(query: String) {
         _searchQuery.value = query
     }
@@ -52,21 +63,17 @@ class AppsViewModel(app: Application) : AndroidViewModel(app) {
         val intent = android.content.Intent(android.content.Intent.ACTION_MAIN).apply {
             addCategory(android.content.Intent.CATEGORY_LAUNCHER)
         }
-        // MATCH_ALL ensures we see all launchable apps including system ones with launchers.
-        // On API 30+ this also requires QUERY_ALL_PACKAGES in the manifest.
         @Suppress("DEPRECATION")
         val flags = PackageManager.GET_META_DATA or PackageManager.MATCH_ALL
-
         val launchable = pm.queryIntentActivities(intent, flags)
 
         return launchable
             .mapNotNull { resolveInfo ->
                 val info = resolveInfo.activityInfo?.applicationInfo ?: return@mapNotNull null
-                // Skip our own app
                 if (info.packageName == "com.mindshield.app") return@mapNotNull null
                 AppEntry(
-                    packageName = info.packageName,
-                    label = pm.getApplicationLabel(info).toString(),
+                    packageName       = info.packageName,
+                    label             = pm.getApplicationLabel(info).toString(),
                     isFrictionEnabled = false
                 )
             }

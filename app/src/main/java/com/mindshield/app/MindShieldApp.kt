@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
 import com.mindshield.app.data.FrictionBlocklist
+import com.mindshield.app.data.IntentFrictionRules
 
 class MindShieldApp : Application() {
 
@@ -12,6 +13,7 @@ class MindShieldApp : Application() {
         super.onCreate()
         createNotificationChannels()
         FrictionBlocklist.init(this)
+        IntentFrictionRules.init(this)
     }
 
     private fun createNotificationChannels() {

@@ -5,6 +5,7 @@ import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.pm.PackageManager
 import android.view.accessibility.AccessibilityEvent
 import com.mindshield.app.data.FrictionBlocklist
+import com.mindshield.app.data.IntentFrictionRules
 
 /**
  * Listens for TYPE_WINDOW_STATE_CHANGED events.
@@ -50,8 +51,10 @@ class MindShieldAccessibilityService : AccessibilityService() {
             overlayShownForPackage = null
         }
 
-        if (!FrictionBlocklist.isBlocked(pkg)) {
-            // Not a friction app — dismiss any stale overlay
+        val shouldFriction = FrictionBlocklist.isBlocked(pkg) ||
+                IntentFrictionRules.isBlockedForCurrentSession(pkg)
+
+        if (!shouldFriction) {
             dismissOverlay()
             return
         }

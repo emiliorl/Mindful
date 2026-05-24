@@ -37,8 +37,7 @@ class FrictionOverlay(
         WindowManager.LayoutParams.MATCH_PARENT,
         WindowManager.LayoutParams.MATCH_PARENT,
         WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
         PixelFormat.TRANSLUCENT
     ).apply {
         gravity = Gravity.TOP or Gravity.START
@@ -166,10 +165,6 @@ class FrictionOverlay(
         breathView.startBreath(BREATH_DURATION_MS) {
             mainHandler.post { btnOpen.isEnabled = true }
         }
-
-        // Buttons need focusable flag toggled so touch events reach them
-        params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
-        windowManager.updateViewLayout(root, params)
 
         return root
     }
