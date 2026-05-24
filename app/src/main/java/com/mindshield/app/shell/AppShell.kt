@@ -8,6 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -15,22 +16,32 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.mindshield.app.screens.AppsScreen
 import com.mindshield.app.screens.HomeScreen
+import com.mindshield.app.screens.IntentPickerScreen
 import com.mindshield.app.screens.NotificationsScreen
 import com.mindshield.app.screens.RoutinesScreen
+import com.mindshield.app.service.ZoneManagerService
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tab definitions
+// Routes
 // ─────────────────────────────────────────────────────────────────────────────
+
+private object Routes {
+    const val INTENT_PICKER = "intent_picker"
+    const val HOME          = "home"
+    const val APPS          = "apps"
+    const val NOTIFICATIONS = "notifications"
+    const val ROUTINES      = "routines"
+}
 
 private sealed class Tab(
     val route: String,
     val label: String,
     val icon: ImageVector
 ) {
-    object Home          : Tab("home",          "Home",          Icons.Outlined.Home)
-    object Apps          : Tab("apps",          "Apps",          Icons.Outlined.Apps)
-    object Notifications : Tab("notifications", "Silence",       Icons.Outlined.NotificationsOff)
-    object Routines      : Tab("routines",      "Routines",      Icons.Outlined.WbTwilight)
+    object Home          : Tab(Routes.HOME,          "Home",    Icons.Outlined.Home)
+    object Apps          : Tab(Routes.APPS,          "Apps",    Icons.Outlined.Apps)
+    object Notifications : Tab(Routes.NOTIFICATIONS, "Silence", Icons.Outlined.NotificationsOff)
+    object Routines      : Tab(Routes.ROUTINES,      "Routines",Icons.Outlined.WbTwilight)
 
     companion object {
         val all = listOf(Home, Apps, Notifications, Routines)
@@ -47,43 +58,65 @@ fun AppShell() {
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
 
+    // On cold launch, go straight to the picker if no session is active
+    val session by ZoneManagerService.sessionState.collectAsStateWithLifecycle()
+    val startDestination = if (session == null) Routes.INTENT_PICKER else Routes.HOME
+
+    // Hide the bottom nav on the picker screen
+    val showBottomBar = currentRoute != Routes.INTENT_PICKER
+
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                Tab.all.forEach { tab ->
-                    NavigationBarItem(
-                        selected = currentRoute == tab.route,
-                        onClick = {
-                            navController.navigate(tab.route) {
-                                // Pop up to the start destination on re-select to avoid
-                                // building up a large back stack
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+            if (showBottomBar) {
+                NavigationBar {
+                    Tab.all.forEach { tab ->
+                        NavigationBarItem(
+                            selected = currentRoute == tab.route,
+                            onClick = {
+                                navController.navigate(tab.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = {
-                            Icon(imageVector = tab.icon, contentDescription = tab.label)
-                        },
-                        label = { Text(tab.label) }
-                    )
+                            },
+                            icon = { Icon(imageVector = tab.icon, contentDescription = tab.label) },
+                            label = { Text(tab.label) }
+                        )
+                    }
                 }
             }
         }
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = Tab.Home.route,
+            startDestination = startDestination,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            composable(Tab.Home.route)          { HomeScreen() }
-            composable(Tab.Apps.route)          { AppsScreen() }
-            composable(Tab.Notifications.route) { NotificationsScreen() }
-            composable(Tab.Routines.route)      { RoutinesScreen() }
+            composable(Routes.INTENT_PICKER) {
+                IntentPickerScreen(
+                    onSessionStarted = {
+                        navController.navigate(Routes.HOME) {
+                            popUpTo(Routes.INTENT_PICKER) { inclusive = true }
+                        }
+                    }
+                )
+            }
+            composable(Routes.HOME) {
+                HomeScreen(
+                    onChangeIntent = {
+                        navController.navigate(Routes.INTENT_PICKER) {
+                            launchSingleTop = true
+                        }
+                    }
+                )
+            }
+            composable(Routes.APPS)          { AppsScreen() }
+            composable(Routes.NOTIFICATIONS) { NotificationsScreen() }
+            composable(Routes.ROUTINES)      { RoutinesScreen() }
         }
     }
 }

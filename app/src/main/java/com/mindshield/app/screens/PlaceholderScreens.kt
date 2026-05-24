@@ -10,19 +10,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Phase 0 placeholders — each will be replaced in subsequent phases
+// Phase 0 placeholders — replaced per phase (HomeScreen moved to HomeScreen.kt)
 // ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Home screen — Phase 1 will add IntentPickerScreen + session timer.
- */
-@Composable
-fun HomeScreen() {
-    PlaceholderScreen(
-        title = "Home",
-        subtitle = "Your active session will appear here.\n(Phase 1 — coming up)"
-    )
-}
 
 /**
  * Apps screen — Phase 2 will add the friction-toggle list.
