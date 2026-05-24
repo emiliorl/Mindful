@@ -4,12 +4,14 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
+import com.mindshield.app.data.SessionStore
 import com.mindshield.app.service.ZoneManagerService
 import com.mindshield.app.util.OnboardingPrefs
 
 /**
- * Restarts the [ZoneManagerService] after a device reboot or app update,
- * but only if the user has already completed onboarding.
+ * Restarts [ZoneManagerService] after a device reboot or app update.
+ * Only fires if onboarding is complete. If a session was active before
+ * the reboot, its type is forwarded so the service can restore it.
  */
 class BootReceiver : BroadcastReceiver() {
 
@@ -19,12 +21,15 @@ class BootReceiver : BroadcastReceiver() {
             action != Intent.ACTION_MY_PACKAGE_REPLACED
         ) return
 
-        // Only restart if onboarding is complete (service is expected)
         if (!OnboardingPrefs.isComplete(context)) return
 
-        ContextCompat.startForegroundService(
-            context,
+        val saved = SessionStore.load(context)
+        val serviceIntent = if (saved != null) {
+            ZoneManagerService.startIntent(context, saved.type)
+        } else {
             Intent(context, ZoneManagerService::class.java)
-        )
+        }
+
+        ContextCompat.startForegroundService(context, serviceIntent)
     }
 }
