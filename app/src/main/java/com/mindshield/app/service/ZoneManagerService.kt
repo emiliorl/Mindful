@@ -13,6 +13,7 @@ import com.mindshield.app.MindShieldApp
 import com.mindshield.app.R
 import com.mindshield.app.data.IntentSession
 import com.mindshield.app.data.IntentType
+import com.mindshield.app.data.RoutinePhase
 import com.mindshield.app.data.SessionStore
 import com.mindshield.app.notification.BatchDeliveryHelper
 import kotlinx.coroutines.*
@@ -31,6 +32,13 @@ class ZoneManagerService : Service() {
     companion object {
         private val _sessionState = MutableStateFlow<IntentSession?>(null)
         val sessionState: StateFlow<IntentSession?> = _sessionState
+
+        private val _routinePhase = MutableStateFlow<RoutinePhase?>(null)
+        val routinePhase: StateFlow<RoutinePhase?> = _routinePhase
+
+        fun updateRoutinePhase(phase: RoutinePhase?) {
+            _routinePhase.value = phase
+        }
 
         const val ACTION_START  = "com.mindshield.START_SESSION"
         const val ACTION_STOP   = "com.mindshield.STOP_SESSION"

@@ -14,44 +14,7 @@ import androidx.compose.ui.unit.dp
 // HomeScreen          → screens/HomeScreen.kt (Phase 1)
 // AppsScreen          → screens/AppsScreen.kt (Phase 2)
 // NotificationsScreen → screens/NotificationsScreen.kt (Phase 3)
+// RoutinesScreen      → screens/RoutinesScreen.kt (Phase 4)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Routines screen — Phase 4 will add morning / wind-down routines.
- */
-@Composable
-fun RoutinesScreen() {
-    PlaceholderScreen(
-        title = "Routines",
-        subtitle = "Set up your morning and wind-down routines here.\n(Phase 4 — coming up)"
-    )
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared placeholder layout
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun PlaceholderScreen(title: String, subtitle: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.height(12.dp))
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
-        }
-    }
-}
+// No more placeholder screens — all tabs have real implementations.

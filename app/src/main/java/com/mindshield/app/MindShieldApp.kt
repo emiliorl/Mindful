@@ -9,7 +9,11 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.mindshield.app.data.AppFrictionStore
 import com.mindshield.app.data.BatchRuleStore
+import com.mindshield.app.data.RoutineChecklistStore
+import com.mindshield.app.data.RoutineStore
 import com.mindshield.app.notification.BatchDeliveryWorker
+import com.mindshield.app.routines.RoutineScheduler
+import com.mindshield.app.service.ZoneManagerService
 import java.util.concurrent.TimeUnit
 
 class MindShieldApp : Application() {
@@ -19,7 +23,12 @@ class MindShieldApp : Application() {
         createNotificationChannels()
         AppFrictionStore.init(this)
         BatchRuleStore.init(this)
+        RoutineStore.init(this)
+        RoutineChecklistStore.init(this)
         enqueueBatchWorker()
+        RoutineScheduler.enqueue(this)
+        // Compute current phase immediately on startup
+        ZoneManagerService.updateRoutinePhase(RoutineStore.computePhase())
     }
 
     private fun enqueueBatchWorker() {

@@ -5,58 +5,72 @@ import android.content.pm.PackageManager
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import com.mindshield.app.data.AppFrictionStore
+import com.mindshield.app.data.FrictionMode
+import com.mindshield.app.data.RoutinePhase
+import com.mindshield.app.service.ZoneManagerService
 
 class MindShieldAccessibilityService : AccessibilityService() {
 
     private var activeOverlay: FrictionOverlay? = null
-    private var overlayPackage: String? = null      // package the visible overlay belongs to
-    private var bypassPackage: String? = null       // allowed through after "Open anyway"
-    private var backSuppressedPackage: String? = null // suppressed during HOME transition after "Go back"
+    private var overlayPackage: String? = null
+    private var bypassPackage: String? = null
+    private var backSuppressedPackage: String? = null
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
 
-        // Never intercept our own app
         if (pkg == packageName) { bypassPackage = null; return }
 
-        // Still transitioning home after "Go back" — ignore events from that package
-        // until a different package (launcher) comes to front and clears the suppression
         if (pkg == backSuppressedPackage) return
         if (pkg != backSuppressedPackage) backSuppressedPackage = null
 
-        // User tapped "Open anyway" for this exact package — let it through
         if (pkg == bypassPackage) return
-
-        // A different app came to front — clear any stale bypass
         if (pkg != bypassPackage) bypassPackage = null
 
-        // Overlay already visible for this package — don't re-trigger on
-        // duplicate events (apps fire multiple TYPE_WINDOW_STATE_CHANGED on launch)
         if (pkg == overlayPackage && activeOverlay != null) return
 
-        if (!AppFrictionStore.shouldFriction(pkg)) {
+        val routinePhase = ZoneManagerService.routinePhase.value
+        val config = AppFrictionStore.configs.value[pkg]
+        val hasFrictionConfig = config != null && config.mode != FrictionMode.OFF
+
+        val shouldShow = when (routinePhase) {
+            RoutinePhase.SLEEP -> hasFrictionConfig
+            RoutinePhase.WIND_DOWN -> hasFrictionConfig
+            RoutinePhase.MORNING -> hasFrictionConfig
+            null -> AppFrictionStore.shouldFriction(pkg)
+        }
+
+        if (!shouldShow) {
             if (pkg != overlayPackage) dismissOverlay()
             return
         }
 
-        Log.d(TAG, "Showing friction overlay for $pkg")
+        val isSleepBlock = routinePhase == RoutinePhase.SLEEP
+        val duration = when (routinePhase) {
+            RoutinePhase.WIND_DOWN -> com.mindshield.app.data.RoutineStore.windDown.value.extendedDelaySeconds
+            RoutinePhase.SLEEP -> AppFrictionStore.pauseDuration.value
+            else -> AppFrictionStore.pauseDuration.value
+        }
+
+        Log.d(TAG, "Showing friction overlay for $pkg (phase=$routinePhase)")
         dismissOverlay()
         overlayPackage = pkg
 
         activeOverlay = FrictionOverlay(
             context = this,
             appName = appLabel(pkg),
-            durationSeconds = AppFrictionStore.pauseDuration.value,
+            durationSeconds = duration,
+            isSleepBlock = isSleepBlock,
             onOpenAnyway = {
-                Log.d(TAG, "User opened $pkg anyway")
+                Log.d(TAG, "User opened $pkg anyway (phase=$routinePhase)")
                 bypassPackage = pkg
                 activeOverlay = null
                 overlayPackage = null
             },
             onGoBack = {
                 Log.d(TAG, "User went back from $pkg")
-                backSuppressedPackage = pkg   // block re-trigger during HOME transition
+                backSuppressedPackage = pkg
                 activeOverlay = null
                 overlayPackage = null
                 performGlobalAction(GLOBAL_ACTION_HOME)

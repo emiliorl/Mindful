@@ -30,7 +30,8 @@ class FrictionOverlay(
     private val appName: String,
     private val durationSeconds: Int,
     private val onOpenAnyway: () -> Unit,
-    private val onGoBack: () -> Unit
+    private val onGoBack: () -> Unit,
+    private val isSleepBlock: Boolean = false
 ) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private var rootView: View? = null
@@ -71,7 +72,9 @@ class FrictionOverlay(
     // View construction
     // ─────────────────────────────────────────────────────────────────────────
 
-    private fun buildView(): View {
+    private fun buildView(): View = if (isSleepBlock) buildSleepView() else buildBreathView()
+
+    private fun buildBreathView(): View {
         val d = context.resources.displayMetrics.density
 
         // ── Colors ────────────────────────────────────────────────────────────
@@ -113,10 +116,7 @@ class FrictionOverlay(
             setPadding(0, (4 * d).toInt(), 0, 0)
         }
 
-        // ── Spacer ────────────────────────────────────────────────────────────
-        val spacerTop = View(context).apply {
-            layoutParams = LinearLayout.LayoutParams(1, 0, 1f)
-        }
+        val spacerTop = View(context).apply { layoutParams = LinearLayout.LayoutParams(1, 0, 1f) }
 
         // ── Breath circle + phase label ───────────────────────────────────────
         val circleSize = (200 * d).toInt()
@@ -133,17 +133,14 @@ class FrictionOverlay(
             setPadding(0, (16 * d).toInt(), 0, 0)
         }
 
-        // ── Spacer ────────────────────────────────────────────────────────────
-        val spacerBottom = View(context).apply {
-            layoutParams = LinearLayout.LayoutParams(1, 0, 1f)
-        }
+        val spacerBottom = View(context).apply { layoutParams = LinearLayout.LayoutParams(1, 0, 1f) }
 
         // ── Buttons ───────────────────────────────────────────────────────────
         val btnWidth = ViewGroup.LayoutParams.MATCH_PARENT
 
         val btnOpen = Button(context).apply {
             text = "Open anyway"
-            visibility = View.GONE     // hidden until cycle completes
+            visibility = View.GONE
             alpha = 0f
             setBackgroundColor(btnColor)
             setTextColor(btnTextColor)
@@ -156,7 +153,7 @@ class FrictionOverlay(
 
         val btnBack = Button(context).apply {
             text = "Go back"
-            setBackgroundColor(0x33_FF_FF_FF.toInt())   // subtle white tint
+            setBackgroundColor(0x33_FF_FF_FF.toInt())
             setTextColor(textPrimary)
             textSize = 16f
             layoutParams = LinearLayout.LayoutParams(btnWidth, (48 * d).toInt())
@@ -173,8 +170,7 @@ class FrictionOverlay(
         container.addView(btnBack)
         root.addView(container)
 
-        // ── Start animation ───────────────────────────────────────────────────
-        val halfMs = durationSeconds * 500L   // half the total in ms
+        val halfMs = durationSeconds * 500L
 
         val inhale = ValueAnimator.ofFloat(0f, 1f).apply {
             duration = halfMs
@@ -194,12 +190,8 @@ class FrictionOverlay(
             }
         }
 
-        AnimatorSet().apply {
-            playSequentially(inhale, exhale)
-            start()
-        }
+        AnimatorSet().apply { playSequentially(inhale, exhale); start() }
 
-        // Reveal "Open anyway" after the full cycle
         exhale.addListener(object : android.animation.AnimatorListenerAdapter() {
             override fun onAnimationEnd(animation: android.animation.Animator) {
                 mainHandler.post {
@@ -209,6 +201,107 @@ class FrictionOverlay(
                 }
             }
         })
+
+        return root
+    }
+
+    // ── Sleep block: no animation, requires 3 deliberate taps ─────────────────
+    private fun buildSleepView(): View {
+        val d = context.resources.displayMetrics.density
+        val bgColor     = 0xFF_07_0D_18.toInt()   // darker navy for sleep
+        val primaryColor = 0xFF_5B_B8_F5.toInt()
+        val textPrimary  = 0xFF_E8_F4_FD.toInt()
+        val textSecond   = 0xFF_8A_B4_D4.toInt()
+
+        var tapCount = 0
+
+        val root = FrameLayout(context).apply {
+            setBackgroundColor(bgColor)
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }
+
+        val container = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL or Gravity.CENTER_VERTICAL
+            setPadding((32 * d).toInt(), (56 * d).toInt(), (32 * d).toInt(), (48 * d).toInt())
+        }
+
+        val moonEmoji = TextView(context).apply {
+            text = "🌙"
+            textSize = 64f
+            gravity = Gravity.CENTER
+        }
+
+        val titleLabel = TextView(context).apply {
+            text = "It's sleep time"
+            textSize = 26f
+            gravity = Gravity.CENTER
+            setTextColor(textPrimary)
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(0, (12 * d).toInt(), 0, 0)
+        }
+
+        val subtitleLabel = TextView(context).apply {
+            text = "$appName is blocked right now"
+            textSize = 15f
+            gravity = Gravity.CENTER
+            setTextColor(textSecond)
+            setPadding(0, (8 * d).toInt(), 0, 0)
+        }
+
+        val spacer = View(context).apply {
+            layoutParams = LinearLayout.LayoutParams(1, (40 * d).toInt())
+        }
+
+        val tapHintLabel = TextView(context).apply {
+            text = "Tap 3 times to unlock anyway"
+            textSize = 13f
+            gravity = Gravity.CENTER
+            setTextColor(0x88_FF_FF_FF.toInt())
+            setPadding(0, 0, 0, (8 * d).toInt())
+        }
+
+        val btnWidth = ViewGroup.LayoutParams.MATCH_PARENT
+
+        val btnUnlock = Button(context).apply {
+            text = "Unlock anyway (1/3)"
+            setBackgroundColor(0x22_FF_FF_FF.toInt())
+            setTextColor(textPrimary)
+            textSize = 15f
+            layoutParams = LinearLayout.LayoutParams(btnWidth, (52 * d).toInt()).apply {
+                bottomMargin = (12 * d).toInt()
+            }
+            setOnClickListener {
+                tapCount++
+                if (tapCount >= 3) {
+                    dismiss(); onOpenAnyway()
+                } else {
+                    text = "Unlock anyway (${tapCount + 1}/3)"
+                }
+            }
+        }
+
+        val btnBack = Button(context).apply {
+            text = "Go to sleep"
+            setBackgroundColor(primaryColor)
+            setTextColor(0xFF_0F_1A_2E.toInt())
+            textSize = 16f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            layoutParams = LinearLayout.LayoutParams(btnWidth, (52 * d).toInt())
+            setOnClickListener { dismiss(); onGoBack() }
+        }
+
+        container.addView(moonEmoji)
+        container.addView(titleLabel)
+        container.addView(subtitleLabel)
+        container.addView(spacer)
+        container.addView(tapHintLabel)
+        container.addView(btnUnlock)
+        container.addView(btnBack)
+        root.addView(container)
 
         return root
     }
