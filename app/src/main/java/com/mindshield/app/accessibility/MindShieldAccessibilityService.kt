@@ -9,8 +9,9 @@ import com.mindshield.app.data.AppFrictionStore
 class MindShieldAccessibilityService : AccessibilityService() {
 
     private var activeOverlay: FrictionOverlay? = null
-    private var overlayPackage: String? = null   // package the visible overlay belongs to
-    private var bypassPackage: String? = null    // allowed through after "Open anyway"
+    private var overlayPackage: String? = null      // package the visible overlay belongs to
+    private var bypassPackage: String? = null       // allowed through after "Open anyway"
+    private var backSuppressedPackage: String? = null // suppressed during HOME transition after "Go back"
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
@@ -18,6 +19,11 @@ class MindShieldAccessibilityService : AccessibilityService() {
 
         // Never intercept our own app
         if (pkg == packageName) { bypassPackage = null; return }
+
+        // Still transitioning home after "Go back" — ignore events from that package
+        // until a different package (launcher) comes to front and clears the suppression
+        if (pkg == backSuppressedPackage) return
+        if (pkg != backSuppressedPackage) backSuppressedPackage = null
 
         // User tapped "Open anyway" for this exact package — let it through
         if (pkg == bypassPackage) return
@@ -50,6 +56,7 @@ class MindShieldAccessibilityService : AccessibilityService() {
             },
             onGoBack = {
                 Log.d(TAG, "User went back from $pkg")
+                backSuppressedPackage = pkg   // block re-trigger during HOME transition
                 activeOverlay = null
                 overlayPackage = null
                 performGlobalAction(GLOBAL_ACTION_HOME)
