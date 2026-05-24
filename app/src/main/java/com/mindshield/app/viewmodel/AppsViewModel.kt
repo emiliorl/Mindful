@@ -49,23 +49,28 @@ class AppsViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun loadUserApps(): List<AppEntry> {
-        val launchable = pm.queryIntentActivities(
-            android.content.Intent(android.content.Intent.ACTION_MAIN).also {
-                it.addCategory(android.content.Intent.CATEGORY_LAUNCHER)
-            },
-            PackageManager.GET_META_DATA
-        )
+        val intent = android.content.Intent(android.content.Intent.ACTION_MAIN).apply {
+            addCategory(android.content.Intent.CATEGORY_LAUNCHER)
+        }
+        // MATCH_ALL ensures we see all launchable apps including system ones with launchers.
+        // On API 30+ this also requires QUERY_ALL_PACKAGES in the manifest.
+        @Suppress("DEPRECATION")
+        val flags = PackageManager.GET_META_DATA or PackageManager.MATCH_ALL
+
+        val launchable = pm.queryIntentActivities(intent, flags)
+
         return launchable
-            .map { it.activityInfo.applicationInfo }
-            .filter { (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0 }
-            .distinctBy { it.packageName }
-            .map { info ->
+            .mapNotNull { resolveInfo ->
+                val info = resolveInfo.activityInfo?.applicationInfo ?: return@mapNotNull null
+                // Skip our own app
+                if (info.packageName == "com.mindshield.app") return@mapNotNull null
                 AppEntry(
                     packageName = info.packageName,
                     label = pm.getApplicationLabel(info).toString(),
                     isFrictionEnabled = false
                 )
             }
+            .distinctBy { it.packageName }
             .sortedBy { it.label.lowercase() }
     }
 }
