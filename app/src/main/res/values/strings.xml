@@ -1,3 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">My Application</string>
+    <string name="app_name">MindShield</string>
+    <string name="accessibility_service_label">MindShield — Friction Layer</string>
+    <string name="accessibility_service_description">Detects when you open a friction-enabled app and shows a brief pause screen. MindShield never reads your keystrokes or screen content.</string>
 </resources>
