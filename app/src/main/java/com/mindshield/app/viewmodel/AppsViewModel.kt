@@ -11,12 +11,20 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
+enum class FrictionMode { OFF, ALWAYS, SMART }
+
 data class AppEntry(
     val packageName: String,
     val label: String,
     val isFrictionEnabled: Boolean,
     val frictionIntents: Set<IntentType> = emptySet()
-)
+) {
+    val frictionMode: FrictionMode get() = when {
+        isFrictionEnabled          -> FrictionMode.ALWAYS
+        frictionIntents.isNotEmpty() -> FrictionMode.SMART
+        else                       -> FrictionMode.OFF
+    }
+}
 
 class AppsViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -47,8 +55,22 @@ class AppsViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun setFriction(packageName: String, enabled: Boolean) {
-        FrictionBlocklist.setBlocked(getApplication(), packageName, enabled)
+    fun setMode(packageName: String, mode: FrictionMode) {
+        val ctx = getApplication<Application>()
+        when (mode) {
+            FrictionMode.OFF -> {
+                FrictionBlocklist.setBlocked(ctx, packageName, false)
+                // Clear any session rules so the row goes fully quiet
+                IntentType.entries.forEach { IntentFrictionRules.setRule(ctx, packageName, it, false) }
+            }
+            FrictionMode.ALWAYS -> {
+                FrictionBlocklist.setBlocked(ctx, packageName, true)
+            }
+            FrictionMode.SMART -> {
+                // Switch to smart — turn off permanent block, keep existing intent rules
+                FrictionBlocklist.setBlocked(ctx, packageName, false)
+            }
+        }
     }
 
     fun setIntentRule(packageName: String, type: IntentType, enabled: Boolean) {

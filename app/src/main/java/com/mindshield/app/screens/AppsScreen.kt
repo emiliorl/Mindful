@@ -1,8 +1,11 @@
 package com.mindshield.app.screens
 
-import android.graphics.drawable.Drawable
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -22,6 +25,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mindshield.app.data.IntentType
 import com.mindshield.app.viewmodel.AppEntry
 import com.mindshield.app.viewmodel.AppsViewModel
+import com.mindshield.app.viewmodel.FrictionMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -39,7 +43,7 @@ fun AppsScreen() {
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Toggle friction per app, or auto-apply it for specific sessions.",
+                text = "Choose when each app gets a pause before opening.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -65,12 +69,12 @@ fun AppsScreen() {
                 items(apps, key = { it.packageName }) { app ->
                     AppRow(
                         app = app,
-                        onToggleAlways = { vm.setFriction(app.packageName, it) },
+                        onModeSelected = { vm.setMode(app.packageName, it) },
                         onToggleIntent = { type, enabled ->
                             vm.setIntentRule(app.packageName, type, enabled)
                         }
                     )
-                    HorizontalDivider(modifier = Modifier.padding(start = 76.dp))
+                    HorizontalDivider(modifier = Modifier.padding(start = 72.dp))
                 }
             }
         }
@@ -84,7 +88,7 @@ fun AppsScreen() {
 @Composable
 private fun AppRow(
     app: AppEntry,
-    onToggleAlways: (Boolean) -> Unit,
+    onModeSelected: (FrictionMode) -> Unit,
     onToggleIntent: (IntentType, Boolean) -> Unit
 ) {
     val context = LocalContext.current
@@ -99,17 +103,18 @@ private fun AppRow(
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        // ── App identity row ──────────────────────────────────────────────────
         Row(verticalAlignment = Alignment.CenterVertically) {
-            // App icon
-            Box(
-                modifier = Modifier.size(44.dp),
-                contentAlignment = Alignment.Center
-            ) {
+            Box(modifier = Modifier.size(44.dp), contentAlignment = Alignment.Center) {
                 if (icon != null) {
                     Image(
                         bitmap = icon!!,
-                        contentDescription = app.label,
+                        contentDescription = null,
                         modifier = Modifier.size(40.dp)
                     )
                 } else {
@@ -120,64 +125,91 @@ private fun AppRow(
                     ) {}
                 }
             }
-
             Spacer(Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = app.label, style = MaterialTheme.typography.bodyLarge)
-                if (app.isFrictionEnabled) {
-                    Text(
-                        text = "Always on",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                } else if (app.frictionIntents.isNotEmpty()) {
-                    Text(
-                        text = "On during: ${app.frictionIntents.joinToString { it.label }}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.secondary
-                    )
-                }
-            }
-
-            Switch(
-                checked = app.isFrictionEnabled,
-                onCheckedChange = onToggleAlways
+            Text(
+                text = app.label,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f)
             )
         }
 
-        // Intent chips — always visible so the user can set up rules even with Always off
-        Spacer(Modifier.height(6.dp))
-        IntentChipRow(
-            selectedIntents = app.frictionIntents,
-            onToggle = { type, enabled -> onToggleIntent(type, enabled) }
-        )
+        Spacer(Modifier.height(10.dp))
+
+        // ── Mode selector ─────────────────────────────────────────────────────
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            FrictionMode.entries.forEachIndexed { index, mode ->
+                SegmentedButton(
+                    shape = SegmentedButtonDefaults.itemShape(
+                        index = index,
+                        count = FrictionMode.entries.size
+                    ),
+                    selected = app.frictionMode == mode,
+                    onClick  = { onModeSelected(mode) },
+                    label = {
+                        Text(
+                            text = when (mode) {
+                                FrictionMode.OFF    -> "Off"
+                                FrictionMode.ALWAYS -> "Always"
+                                FrictionMode.SMART  -> "Smart"
+                            },
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    },
+                    icon = {
+                        Text(
+                            text = when (mode) {
+                                FrictionMode.OFF    -> "○"
+                                FrictionMode.ALWAYS -> "🔒"
+                                FrictionMode.SMART  -> "🎯"
+                            }
+                        )
+                    }
+                )
+            }
+        }
+
+        // ── Session chips — only visible in Smart mode ─────────────────────────
+        AnimatedVisibility(
+            visible = app.frictionMode == FrictionMode.SMART,
+            enter = expandVertically(),
+            exit  = shrinkVertically()
+        ) {
+            Column {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "Pause during these sessions:",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+                Spacer(Modifier.height(6.dp))
+                SessionChipRow(
+                    selectedIntents = app.frictionIntents,
+                    onToggle = onToggleIntent
+                )
+            }
+        }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Intent chips
+// Session chips
 // ─────────────────────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun IntentChipRow(
+private fun SessionChipRow(
     selectedIntents: Set<IntentType>,
     onToggle: (IntentType, Boolean) -> Unit
 ) {
-    // Exclude JUST_LOOKING — friction during "just looking" defeats the purpose
     val types = IntentType.entries.filter { it != IntentType.JUST_LOOKING }
-
-    Row(
-        modifier = Modifier.padding(start = 56.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         types.forEach { type ->
             val selected = type in selectedIntents
             FilterChip(
                 selected = selected,
-                onClick = { onToggle(type, !selected) },
-                label = { Text(type.emoji, style = MaterialTheme.typography.labelSmall) },
-                modifier = Modifier.height(28.dp)
+                onClick  = { onToggle(type, !selected) },
+                label    = { Text("${type.emoji} ${type.label}") }
             )
         }
     }
