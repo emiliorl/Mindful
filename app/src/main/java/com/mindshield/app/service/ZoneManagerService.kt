@@ -14,6 +14,8 @@ import com.mindshield.app.R
 import com.mindshield.app.data.IntentSession
 import com.mindshield.app.data.IntentType
 import com.mindshield.app.data.SessionStore
+import com.mindshield.app.notification.BatchDeliveryHelper
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -62,6 +64,11 @@ class ZoneManagerService : Service() {
             ACTION_STOP -> {
                 _sessionState.value = null
                 SessionStore.clear(this)
+                // Deliver any held notifications when the session ends
+                val ctx = this
+                CoroutineScope(Dispatchers.IO).launch {
+                    BatchDeliveryHelper.deliverAll(ctx)
+                }
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
                 return START_NOT_STICKY

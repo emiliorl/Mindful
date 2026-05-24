@@ -11,20 +11,10 @@ import androidx.compose.ui.unit.dp
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Phase 0 placeholders — replaced per phase
-// HomeScreen  → screens/HomeScreen.kt (Phase 1)
-// AppsScreen  → screens/AppsScreen.kt (Phase 2)
+// HomeScreen          → screens/HomeScreen.kt (Phase 1)
+// AppsScreen          → screens/AppsScreen.kt (Phase 2)
+// NotificationsScreen → screens/NotificationsScreen.kt (Phase 3)
 // ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Notifications screen — Phase 3 will add batching controls.
- */
-@Composable
-fun NotificationsScreen() {
-    PlaceholderScreen(
-        title = "Silence",
-        subtitle = "Batch and schedule your notifications here.\n(Phase 3 — coming up)"
-    )
-}
 
 /**
  * Routines screen — Phase 4 will add morning / wind-down routines.

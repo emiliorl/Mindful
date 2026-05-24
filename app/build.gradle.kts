@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.devtools.ksp)
 }
 
 android {
@@ -64,9 +65,10 @@ dependencies {
     // Coroutines (StateFlow in ZoneManagerService)
     implementation(libs.kotlinx.coroutines.android)
 
-    // Room (used from Phase 3 onward — declare now to avoid AGP conflicts)
+    // Room
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
 
     // WorkManager (used from Phase 4 onward)
     implementation("androidx.work:work-runtime-ktx:2.9.0")

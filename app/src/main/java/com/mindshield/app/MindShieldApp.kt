@@ -4,7 +4,13 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import com.mindshield.app.data.AppFrictionStore
+import com.mindshield.app.data.BatchRuleStore
+import com.mindshield.app.notification.BatchDeliveryWorker
+import java.util.concurrent.TimeUnit
 
 class MindShieldApp : Application() {
 
@@ -12,6 +18,17 @@ class MindShieldApp : Application() {
         super.onCreate()
         createNotificationChannels()
         AppFrictionStore.init(this)
+        BatchRuleStore.init(this)
+        enqueueBatchWorker()
+    }
+
+    private fun enqueueBatchWorker() {
+        val request = PeriodicWorkRequestBuilder<BatchDeliveryWorker>(1, TimeUnit.HOURS).build()
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "batch_delivery",
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
     }
 
     private fun createNotificationChannels() {
