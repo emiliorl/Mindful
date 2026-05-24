@@ -50,9 +50,9 @@ class MindShieldAccessibilityService : AccessibilityService() {
             },
             onGoBack = {
                 Log.d(TAG, "User went back from $pkg")
-                performGlobalAction(GLOBAL_ACTION_BACK)
                 activeOverlay = null
                 overlayPackage = null
+                performGlobalAction(GLOBAL_ACTION_HOME)
             }
         ).also { it.show() }
     }
