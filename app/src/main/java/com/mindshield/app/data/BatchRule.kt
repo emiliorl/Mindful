@@ -15,6 +15,17 @@ enum class BatchCategory {
     }
 }
 
+/** How a BATCHED app's held notifications get released. Only meaningful when category == BATCHED. */
+enum class DeliveryMode {
+    DAYPART, COUNT, INTERVAL;
+
+    val displayLabel: String get() = when (this) {
+        DAYPART  -> "Scheduled"
+        COUNT    -> "By count"
+        INTERVAL -> "By interval"
+    }
+}
+
 /**
  * Override for a single notification channel within an app.
  * Only set when the user explicitly configures a channel differently from the app default.
@@ -33,7 +44,10 @@ data class BatchRule(
     val packageName: String,
     val appLabel: String,
     val category: BatchCategory = BatchCategory.BATCHED,
-    val channelOverrides: Map<String, ChannelRule> = emptyMap()
+    val channelOverrides: Map<String, ChannelRule> = emptyMap(),
+    val deliveryMode: DeliveryMode = DeliveryMode.DAYPART,
+    val intervalHours: Int = 2,      // presets: 1 / 2 / 4
+    val countThreshold: Int = 10     // presets: 5 / 10 / 20
 )
 
 data class GlobalBatchSettings(

@@ -25,6 +25,7 @@ import androidx.lifecycle.eventFlow
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mindshield.app.data.BatchCategory
 import com.mindshield.app.data.BatchRule
+import com.mindshield.app.data.DeliveryMode
 import com.mindshield.app.data.HeldNotification
 import com.mindshield.app.service.ZoneManagerService
 import com.mindshield.app.util.PermissionStatus
@@ -416,16 +417,30 @@ private fun AppRuleRow(rule: BatchRule, context: Context, onClick: () -> Unit) {
                 BatchCategory.INSTANT -> MaterialTheme.colorScheme.tertiary to "Instant"
                 BatchCategory.BATCHED -> MaterialTheme.colorScheme.primary to "Batched"
             }
-            Surface(
-                color = badgeColor.copy(alpha = 0.12f),
-                shape = MaterialTheme.shapes.small
-            ) {
-                Text(
-                    labelText,
-                    style    = MaterialTheme.typography.labelSmall,
-                    color    = badgeColor,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                )
+            Column {
+                Surface(
+                    color = badgeColor.copy(alpha = 0.12f),
+                    shape = MaterialTheme.shapes.small
+                ) {
+                    Text(
+                        labelText,
+                        style    = MaterialTheme.typography.labelSmall,
+                        color    = badgeColor,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+                if (rule.category == BatchCategory.BATCHED) {
+                    Text(
+                        text = when (rule.deliveryMode) {
+                            DeliveryMode.DAYPART  -> "Scheduled"
+                            DeliveryMode.COUNT    -> "Every ${rule.countThreshold} notifications"
+                            DeliveryMode.INTERVAL -> "Every ${rule.intervalHours}h"
+                        },
+                        style    = MaterialTheme.typography.labelSmall,
+                        color    = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
             }
         },
         leadingContent    = { AppIcon(icon) },

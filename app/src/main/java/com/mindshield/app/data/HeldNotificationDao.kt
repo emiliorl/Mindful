@@ -26,6 +26,12 @@ interface HeldNotificationDao {
     @Query("SELECT * FROM held_notifications WHERE status = 'QUEUED' AND packageName = :pkg ORDER BY postedAtMs ASC")
     suspend fun getQueuedForPackageSync(pkg: String): List<HeldNotification>
 
+    @Query("SELECT COUNT(*) FROM held_notifications WHERE status = 'QUEUED' AND packageName = :pkg")
+    suspend fun countQueuedForPackage(pkg: String): Int
+
+    @Query("SELECT MAX(deliveredAtMs) FROM held_notifications WHERE status = 'DELIVERED' AND packageName = :pkg")
+    suspend fun getLastDeliveredForPackage(pkg: String): Long?
+
     // ── Delivery actions ───────────────────────────────────────────────────────
 
     @Query("UPDATE held_notifications SET status = 'DELIVERED', deliveredAtMs = :ts WHERE status = 'QUEUED'")
@@ -33,6 +39,9 @@ interface HeldNotificationDao {
 
     @Query("UPDATE held_notifications SET status = 'DELIVERED', deliveredAtMs = :ts WHERE status = 'QUEUED' AND packageName = :pkg")
     suspend fun markPackageDelivered(pkg: String, ts: Long)
+
+    @Query("UPDATE held_notifications SET status = 'DELIVERED', deliveredAtMs = :ts WHERE status = 'QUEUED' AND packageName NOT IN (:excludedPackages)")
+    suspend fun markDeliveredExcept(excludedPackages: List<String>, ts: Long)
 
     // ── Stats queries ──────────────────────────────────────────────────────────
 

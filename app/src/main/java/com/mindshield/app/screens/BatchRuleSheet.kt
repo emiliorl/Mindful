@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.mindshield.app.data.BatchCategory
 import com.mindshield.app.data.BatchRule
 import com.mindshield.app.data.ChannelRule
+import com.mindshield.app.data.DeliveryMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,6 +31,9 @@ fun BatchRuleSheet(
     onDismiss: () -> Unit
 ) {
     var appCategory by remember { mutableStateOf(rule.category) }
+    var deliveryMode by remember { mutableStateOf(rule.deliveryMode) }
+    var intervalHours by remember { mutableStateOf(rule.intervalHours) }
+    var countThreshold by remember { mutableStateOf(rule.countThreshold) }
     // Local mutable copy of channel overrides so edits don't persist until Save is tapped
     var channelOverrides by remember { mutableStateOf(rule.channelOverrides.toMutableMap()) }
 
@@ -72,6 +76,19 @@ fun BatchRuleSheet(
                 title       = "Batched",
                 description = "All notifications held until schedule fires."
             )
+
+            // ── Delivery mode (only meaningful when Batched) ──────────────────
+            if (appCategory == BatchCategory.BATCHED) {
+                Spacer(Modifier.height(20.dp))
+                DeliveryModePicker(
+                    mode            = deliveryMode,
+                    intervalHours   = intervalHours,
+                    countThreshold  = countThreshold,
+                    onModeSelected  = { deliveryMode = it },
+                    onIntervalSelected = { intervalHours = it },
+                    onCountSelected    = { countThreshold = it }
+                )
+            }
 
             // ── Per-channel overrides ─────────────────────────────────────────
             Spacer(Modifier.height(24.dp))
@@ -137,7 +154,15 @@ fun BatchRuleSheet(
 
             Button(
                 onClick  = {
-                    onSave(rule.copy(category = appCategory, channelOverrides = channelOverrides))
+                    onSave(
+                        rule.copy(
+                            category         = appCategory,
+                            channelOverrides = channelOverrides,
+                            deliveryMode     = deliveryMode,
+                            intervalHours    = intervalHours,
+                            countThreshold   = countThreshold
+                        )
+                    )
                 },
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Save") }
@@ -155,6 +180,71 @@ fun BatchRuleSheet(
                 Spacer(Modifier.width(8.dp))
                 Text("Remove rule")
             }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Delivery mode picker
+// ─────────────────────────────────────────────────────────────────────────────
+
+private val INTERVAL_PRESETS = listOf(1, 2, 4)
+private val COUNT_PRESETS    = listOf(5, 10, 20)
+
+@Composable
+private fun DeliveryModePicker(
+    mode: DeliveryMode,
+    intervalHours: Int,
+    countThreshold: Int,
+    onModeSelected: (DeliveryMode) -> Unit,
+    onIntervalSelected: (Int) -> Unit,
+    onCountSelected: (Int) -> Unit
+) {
+    Column {
+        Text(
+            "Delivery",
+            style      = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(Modifier.height(8.dp))
+
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            DeliveryMode.entries.forEachIndexed { index, m ->
+                SegmentedButton(
+                    shape    = SegmentedButtonDefaults.itemShape(index, DeliveryMode.entries.size),
+                    selected = mode == m,
+                    onClick  = { onModeSelected(m) },
+                    label    = { Text(m.displayLabel, style = MaterialTheme.typography.labelMedium) }
+                )
+            }
+        }
+
+        when (mode) {
+            DeliveryMode.INTERVAL -> {
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    INTERVAL_PRESETS.forEach { hours ->
+                        FilterChip(
+                            selected = intervalHours == hours,
+                            onClick  = { onIntervalSelected(hours) },
+                            label    = { Text("${hours}h") }
+                        )
+                    }
+                }
+            }
+            DeliveryMode.COUNT -> {
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    COUNT_PRESETS.forEach { count ->
+                        FilterChip(
+                            selected = countThreshold == count,
+                            onClick  = { onCountSelected(count) },
+                            label    = { Text("$count") }
+                        )
+                    }
+                }
+            }
+            DeliveryMode.DAYPART -> Unit
         }
     }
 }

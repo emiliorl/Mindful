@@ -38,6 +38,22 @@ object BatchDeliveryHelper {
         dao.deleteOldDelivered(now - KEEP_DELIVERED_MS)
     }
 
+    /**
+     * Daypart sweep: delivers everything queued except apps on their own
+     * COUNT/INTERVAL delivery trigger, which must not be flushed early.
+     */
+    @Suppress("MissingPermission")
+    suspend fun deliverDaypart(context: Context, excludePackages: Set<String>) {
+        val dao    = AppDatabase.get(context).heldNotificationDao()
+        val queued = dao.getQueuedSync().filter { it.packageName !in excludePackages }
+        if (queued.isEmpty()) return
+
+        post(context, queued)
+        val now = System.currentTimeMillis()
+        dao.markDeliveredExcept(excludePackages.toList(), now)
+        dao.deleteOldDelivered(now - KEEP_DELIVERED_MS)
+    }
+
     private fun post(context: Context, notifications: List<HeldNotification>) {
         val nm = NotificationManagerCompat.from(context)
         notifications.groupBy { it.packageName }.forEach { (pkg, group) ->

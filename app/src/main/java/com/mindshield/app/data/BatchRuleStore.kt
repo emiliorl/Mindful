@@ -26,6 +26,9 @@ object BatchRuleStore {
     private const val PREFIX_LABEL        = "batch_label:"
     private const val PREFIX_CAT          = "batch_cat:"
     private const val PREFIX_CHANNELS     = "batch_channels:"
+    private const val PREFIX_MODE         = "batch_mode:"
+    private const val PREFIX_INTERVAL     = "batch_interval:"
+    private const val PREFIX_COUNT        = "batch_count:"
     private const val PREFIX_KNOWN_CH     = "known_ch:"
     private const val KEY_GLOBAL_TIMES    = "global_times"
     private const val KEY_GLOBAL_SESSION  = "global_batch_session"
@@ -66,6 +69,9 @@ object BatchRuleStore {
             remove("$PREFIX_LABEL$pkg")
             remove("$PREFIX_CAT$pkg")
             remove("$PREFIX_CHANNELS$pkg")
+            remove("$PREFIX_MODE$pkg")
+            remove("$PREFIX_INTERVAL$pkg")
+            remove("$PREFIX_COUNT$pkg")
         }.apply()
     }
 
@@ -120,6 +126,9 @@ object BatchRuleStore {
             putString("$PREFIX_LABEL${rule.packageName}",    rule.appLabel)
             putString("$PREFIX_CAT${rule.packageName}",      rule.category.name)
             putString("$PREFIX_CHANNELS${rule.packageName}", encodeChannelRules(rule.channelOverrides))
+            putString("$PREFIX_MODE${rule.packageName}",     rule.deliveryMode.name)
+            putInt("$PREFIX_INTERVAL${rule.packageName}",    rule.intervalHours)
+            putInt("$PREFIX_COUNT${rule.packageName}",       rule.countThreshold)
         }.apply()
     }
 
@@ -133,7 +142,11 @@ object BatchRuleStore {
                 val catStr = all["$PREFIX_CAT$pkg"] as? String ?: BatchCategory.BATCHED.name
                 val cat    = runCatching { BatchCategory.valueOf(catStr) }.getOrDefault(BatchCategory.BATCHED)
                 val overrides = decodeChannelRules(all["$PREFIX_CHANNELS$pkg"] as? String ?: "")
-                pkg to BatchRule(pkg, label, cat, overrides)
+                val modeStr = all["$PREFIX_MODE$pkg"] as? String ?: DeliveryMode.DAYPART.name
+                val mode    = runCatching { DeliveryMode.valueOf(modeStr) }.getOrDefault(DeliveryMode.DAYPART)
+                val interval = all["$PREFIX_INTERVAL$pkg"] as? Int ?: 2
+                val count    = all["$PREFIX_COUNT$pkg"] as? Int ?: 10
+                pkg to BatchRule(pkg, label, cat, overrides, mode, interval, count)
             }
             .toMap()
     }

@@ -6,6 +6,7 @@ import android.service.notification.StatusBarNotification
 import com.mindshield.app.data.AppDatabase
 import com.mindshield.app.data.BatchCategory
 import com.mindshield.app.data.BatchRuleStore
+import com.mindshield.app.data.DeliveryMode
 import com.mindshield.app.data.HeldNotification
 import com.mindshield.app.data.humanizeChannelId
 import com.mindshield.app.service.ZoneManagerService
@@ -56,7 +57,8 @@ class MindShieldNotificationService : NotificationListenerService() {
         val text     = extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
 
         scope.launch {
-            AppDatabase.get(applicationContext).heldNotificationDao().insert(
+            val dao = AppDatabase.get(applicationContext).heldNotificationDao()
+            dao.insert(
                 HeldNotification(
                     packageName = sbn.packageName,
                     appLabel    = appLabel,
@@ -65,6 +67,12 @@ class MindShieldNotificationService : NotificationListenerService() {
                     postedAtMs  = sbn.postTime
                 )
             )
+
+            if (rule?.deliveryMode == DeliveryMode.COUNT &&
+                dao.countQueuedForPackage(sbn.packageName) >= rule.countThreshold
+            ) {
+                BatchDeliveryHelper.deliverForPackage(applicationContext, sbn.packageName)
+            }
         }
     }
 
