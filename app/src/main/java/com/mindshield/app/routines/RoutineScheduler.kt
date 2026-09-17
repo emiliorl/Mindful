@@ -8,12 +8,20 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.mindshield.app.data.RoutinePhase
 import com.mindshield.app.data.RoutineStore
+import com.mindshield.app.service.ServiceStarter
 import com.mindshield.app.service.ZoneManagerService
+import com.mindshield.app.util.OnboardingPrefs
 import java.util.concurrent.TimeUnit
 
 class RoutineScheduler(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
 
     override suspend fun doWork(): Result {
+        // Liveness check: restart ZoneManagerService if it died silently
+        // (OEM battery killers, low-memory kills, etc).
+        if (OnboardingPrefs.isComplete(applicationContext) && !ZoneManagerService.isRunning.value) {
+            ServiceStarter.start(applicationContext)
+        }
+
         val phase = RoutineStore.computePhase()
         ZoneManagerService.updateRoutinePhase(phase)
 

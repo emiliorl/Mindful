@@ -3,8 +3,8 @@ package com.mindshield.app.receiver
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import androidx.core.content.ContextCompat
 import com.mindshield.app.data.SessionStore
+import com.mindshield.app.service.ServiceStarter
 import com.mindshield.app.service.ZoneManagerService
 import com.mindshield.app.util.OnboardingPrefs
 
@@ -30,6 +30,6 @@ class BootReceiver : BroadcastReceiver() {
             Intent(context, ZoneManagerService::class.java)
         }
 
-        ContextCompat.startForegroundService(context, serviceIntent)
+        ServiceStarter.start(context, serviceIntent)
     }
 }

@@ -38,6 +38,11 @@ class ZoneManagerService : Service() {
         private val _routinePhase = MutableStateFlow<RoutinePhase?>(null)
         val routinePhase: StateFlow<RoutinePhase?> = _routinePhase
 
+        // Resets to false whenever the process dies, so this doubles as a
+        // cross-restart "is the service actually alive" check with no extra state.
+        private val _isRunning = MutableStateFlow(false)
+        val isRunning: StateFlow<Boolean> = _isRunning
+
         fun updateRoutinePhase(phase: RoutinePhase?) {
             _routinePhase.value = phase
         }
@@ -58,6 +63,26 @@ class ZoneManagerService : Service() {
             Intent(context, ZoneManagerService::class.java).apply {
                 action = ACTION_STOP
             }
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        _isRunning.value = true
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        _isRunning.value = false
+    }
+
+    /**
+     * API 35+: a "dataSync" foreground service is force-stopped after ~6h in a
+     * rolling 24h window. Reset the foreground state immediately so a fresh
+     * budget starts rather than leaving the service silently dead.
+     */
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        ServiceStarter.start(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
