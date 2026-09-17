@@ -1,14 +1,23 @@
 package com.mindshield.app.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.AccessTime
+import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,190 +26,217 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mindshield.app.data.ChecklistItem
+import com.mindshield.app.data.MorningConfig
 import com.mindshield.app.data.RoutinePhase
 import com.mindshield.app.data.WindDownConfig
-import com.mindshield.app.data.MorningConfig
 import com.mindshield.app.viewmodel.RoutinesViewModel
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
+// Per-routine accent colors
+private val MorningColor  = Color(0xFFF59E0B)  // warm amber
+private val WindDownColor = Color(0xFF6366F1)  // calm indigo
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RoutinesScreen(vm: RoutinesViewModel = viewModel()) {
-    val morning by vm.morning.collectAsStateWithLifecycle()
-    val windDown by vm.windDown.collectAsStateWithLifecycle()
-    val completedIds by vm.completedIds.collectAsStateWithLifecycle()
+    val morning         by vm.morning.collectAsStateWithLifecycle()
+    val windDown        by vm.windDown.collectAsStateWithLifecycle()
+    val completedIds    by vm.completedIds.collectAsStateWithLifecycle()
     val morningProgress by vm.morningProgress.collectAsStateWithLifecycle()
     val windDownProgress by vm.windDownProgress.collectAsStateWithLifecycle()
-    val morningStreak by vm.morningStreak.collectAsStateWithLifecycle()
-    val windDownStreak by vm.windDownStreak.collectAsStateWithLifecycle()
-    val phase by vm.routinePhase.collectAsStateWithLifecycle()
+    val morningStreak   by vm.morningStreak.collectAsStateWithLifecycle()
+    val windDownStreak  by vm.windDownStreak.collectAsStateWithLifecycle()
+    val phase           by vm.routinePhase.collectAsStateWithLifecycle()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            Text(
-                text = "Routines",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
+            Column {
+                Text(
+                    text = "Routines",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Build habits around your phone use.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
-        // Current phase status
         if (phase != null) {
             item { PhaseStatusBanner(phase!!) }
         }
 
-        // Timeline
         if (morning.enabled || windDown.enabled) {
-            item { RoutineTimeline(morning, windDown, phase) }
+            item { DayTimeline(morning, windDown, phase) }
         }
 
-        // Morning routine
         item {
-            RoutineSection(
-                title = "Morning Routine 🌅",
+            RoutineCard(
+                emoji = "🌅",
+                title = "Morning Routine",
+                description = "Lock phone until your morning tasks are done.",
+                accentColor = MorningColor,
                 enabled = morning.enabled,
                 onToggle = { vm.setMorningEnabled(it) },
                 streak = morningStreak,
-                content = {
-                    MorningRoutineEditor(
-                        config = morning,
-                        completedIds = completedIds,
-                        progress = morningProgress,
-                        onWakeTimeChange = { vm.setMorningWakeTime(it) },
-                        onPhoneTimeChange = { vm.setMorningPhoneAvailableTime(it) },
-                        onItemToggle = { vm.toggleMorningItem(it) },
-                        onAddItem = { vm.addMorningChecklistItem(it) },
-                        onRemoveItem = { vm.removeMorningChecklistItem(it) }
-                    )
-                }
-            )
+                progress = morningProgress,
+                checklistTotal = morning.checklist.size
+            ) {
+                MorningEditor(
+                    config = morning,
+                    completedIds = completedIds,
+                    accentColor = MorningColor,
+                    onWakeTimeChange = { vm.setMorningWakeTime(it) },
+                    onPhoneTimeChange = { vm.setMorningPhoneAvailableTime(it) },
+                    onItemToggle = { vm.toggleMorningItem(it) },
+                    onAddItem = { vm.addMorningChecklistItem(it) },
+                    onRemoveItem = { vm.removeMorningChecklistItem(it) }
+                )
+            }
         }
 
-        // Wind-down routine
         item {
-            RoutineSection(
-                title = "Wind-Down Routine 🌙",
+            RoutineCard(
+                emoji = "🌙",
+                title = "Wind-Down Routine",
+                description = "Increase friction and wind down before sleep.",
+                accentColor = WindDownColor,
                 enabled = windDown.enabled,
                 onToggle = { vm.setWindDownEnabled(it) },
                 streak = windDownStreak,
-                content = {
-                    WindDownRoutineEditor(
-                        config = windDown,
-                        completedIds = completedIds,
-                        progress = windDownProgress,
-                        onStartTimeChange = { vm.setWindDownStartTime(it) },
-                        onSleepTimeChange = { vm.setWindDownSleepTime(it) },
-                        onDelayChange = { vm.setWindDownExtendedDelay(it) },
-                        onItemToggle = { vm.toggleWindDownItem(it) },
-                        onAddItem = { vm.addWindDownChecklistItem(it) },
-                        onRemoveItem = { vm.removeWindDownChecklistItem(it) }
-                    )
-                }
-            )
+                progress = windDownProgress,
+                checklistTotal = windDown.checklist.size
+            ) {
+                WindDownEditor(
+                    config = windDown,
+                    completedIds = completedIds,
+                    accentColor = WindDownColor,
+                    onStartTimeChange = { vm.setWindDownStartTime(it) },
+                    onSleepTimeChange = { vm.setWindDownSleepTime(it) },
+                    onDelayChange = { vm.setWindDownExtendedDelay(it) },
+                    onItemToggle = { vm.toggleWindDownItem(it) },
+                    onAddItem = { vm.addWindDownChecklistItem(it) },
+                    onRemoveItem = { vm.removeWindDownChecklistItem(it) }
+                )
+            }
         }
+
+        item { Spacer(Modifier.height(8.dp)) }
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase banner
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun PhaseStatusBanner(phase: RoutinePhase) {
-    val (emoji, label, containerColor) = when (phase) {
-        RoutinePhase.MORNING -> Triple("🌅", "Morning routine active", MaterialTheme.colorScheme.primaryContainer)
-        RoutinePhase.WIND_DOWN -> Triple("🌙", "Wind-down active — friction extended", MaterialTheme.colorScheme.secondaryContainer)
-        RoutinePhase.SLEEP -> Triple("💤", "Sleep mode — apps are blocked", MaterialTheme.colorScheme.tertiaryContainer)
+    val (emoji, title, sub, color) = when (phase) {
+        RoutinePhase.MORNING   -> PhaseInfo("🌅", "Morning routine", "Phone unlocks when you finish.", MorningColor)
+        RoutinePhase.WIND_DOWN -> PhaseInfo("🌙", "Wind-down active", "Friction extended on all apps.", WindDownColor)
+        RoutinePhase.SLEEP     -> PhaseInfo("💤", "Sleep mode", "Apps are blocked until morning.", Color(0xFF64748B))
     }
     Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = containerColor,
+        shape = RoundedCornerShape(16.dp),
+        color = color.copy(alpha = 0.12f),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(emoji, style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.width(8.dp))
-            Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(color.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(emoji, fontSize = 20.sp)
+            }
+            Spacer(Modifier.width(14.dp))
+            Column {
+                Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = color)
+                Text(sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }
 
+private data class PhaseInfo(val emoji: String, val title: String, val sub: String, val color: Color)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Day timeline
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
-private fun RoutineTimeline(morning: MorningConfig, windDown: WindDownConfig, phase: RoutinePhase?) {
+private fun DayTimeline(morning: MorningConfig, windDown: WindDownConfig, phase: RoutinePhase?) {
     val fmt = DateTimeFormatter.ofPattern("h:mm a")
-    Column {
-        Text(
-            "Today's Timeline",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(8.dp))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(32.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Simple bar representation — morning on left, wind-down on right
-            if (morning.enabled) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp))
-                        .background(
-                            if (phase == RoutinePhase.MORNING)
-                                MaterialTheme.colorScheme.primary
-                            else
-                                MaterialTheme.colorScheme.primaryContainer
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "${morning.wakeTime.format(fmt)}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (phase == RoutinePhase.MORNING)
-                            MaterialTheme.colorScheme.onPrimary
-                        else
-                            MaterialTheme.colorScheme.onPrimaryContainer
+    val morningActive = phase == RoutinePhase.MORNING
+    val eveningActive = phase == RoutinePhase.WIND_DOWN || phase == RoutinePhase.SLEEP
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        elevation = CardDefaults.cardElevation(0.dp)
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+            Text(
+                "Today's schedule",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (morning.enabled) {
+                    TimelineNode(
+                        emoji = "🌅",
+                        timeLabel = morning.wakeTime.format(fmt),
+                        routineLabel = "Morning",
+                        color = if (morningActive) MorningColor else MorningColor.copy(alpha = 0.45f),
+                        active = morningActive
                     )
                 }
-            }
-            if (windDown.enabled) {
-                val isActive = phase == RoutinePhase.WIND_DOWN || phase == RoutinePhase.SLEEP
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clip(
-                            if (!morning.enabled)
-                                RoundedCornerShape(8.dp)
-                            else
-                                RoundedCornerShape(topEnd = 8.dp, bottomEnd = 8.dp)
-                        )
-                        .background(
-                            if (isActive)
-                                MaterialTheme.colorScheme.secondary
-                            else
-                                MaterialTheme.colorScheme.secondaryContainer
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "${windDown.startTime.format(fmt)}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isActive)
-                            MaterialTheme.colorScheme.onSecondary
-                        else
-                            MaterialTheme.colorScheme.onSecondaryContainer
+
+                // Connecting line — fills remaining space
+                if (morning.enabled && windDown.enabled) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(2.dp)
+                            .background(
+                                MaterialTheme.colorScheme.outlineVariant,
+                                shape = RoundedCornerShape(1.dp)
+                            )
+                    )
+                }
+
+                if (windDown.enabled) {
+                    TimelineNode(
+                        emoji = "🌙",
+                        timeLabel = windDown.startTime.format(fmt),
+                        routineLabel = "Wind-down",
+                        color = if (eveningActive) WindDownColor else WindDownColor.copy(alpha = 0.45f),
+                        active = eveningActive
                     )
                 }
             }
@@ -209,46 +245,179 @@ private fun RoutineTimeline(morning: MorningConfig, windDown: WindDownConfig, ph
 }
 
 @Composable
-private fun RoutineSection(
+private fun TimelineNode(
+    emoji: String,
+    timeLabel: String,
+    routineLabel: String,
+    color: Color,
+    active: Boolean
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(color.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(emoji, fontSize = 16.sp)
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            timeLabel,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+            color = if (active) color else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            routineLabel,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Routine card
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun RoutineCard(
+    emoji: String,
     title: String,
+    description: String,
+    accentColor: Color,
     enabled: Boolean,
     onToggle: (Boolean) -> Unit,
     streak: Int,
-    content: @Composable () -> Unit
+    progress: Float,
+    checklistTotal: Int,
+    content: @Composable ColumnScope.() -> Unit
 ) {
+    val animatedProgress by animateFloatAsState(targetValue = progress, label = "progress")
+
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(20.dp)) {
+
+            // ── Header ──────────────────────────────────────────────────────
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    if (streak > 0) {
-                        Text(
-                            "🔥 $streak day streak",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                // Emoji icon
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(accentColor.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(emoji, fontSize = 22.sp)
                 }
-                Switch(checked = enabled, onCheckedChange = onToggle)
+
+                Spacer(Modifier.width(14.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            title,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (streak > 0) {
+                            Spacer(Modifier.width(8.dp))
+                            StreakBadge(streak, accentColor)
+                        }
+                    }
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Spacer(Modifier.width(8.dp))
+
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = onToggle,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.surface,
+                        checkedTrackColor = accentColor
+                    )
+                )
             }
 
-            if (enabled) {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-                content()
+            // ── Progress bar ────────────────────────────────────────────────
+            if (enabled && checklistTotal > 0) {
+                Spacer(Modifier.height(16.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    LinearProgressIndicator(
+                        progress = { animatedProgress },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                        color = accentColor,
+                        trackColor = accentColor.copy(alpha = 0.14f)
+                    )
+                    Text(
+                        "${(progress * checklistTotal).toInt()}/$checklistTotal",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // ── Expanded content ────────────────────────────────────────────
+            AnimatedVisibility(
+                visible = enabled,
+                enter = expandVertically(),
+                exit = shrinkVertically()
+            ) {
+                Column {
+                    Spacer(Modifier.height(20.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    Spacer(Modifier.height(16.dp))
+                    content()
+                }
             }
         }
     }
 }
 
+@Composable
+private fun StreakBadge(streak: Int, accentColor: Color) {
+    Surface(
+        shape = CircleShape,
+        color = accentColor.copy(alpha = 0.14f)
+    ) {
+        Text(
+            text = "🔥 $streak",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = accentColor,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Morning editor
+// ─────────────────────────────────────────────────────────────────────────────
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MorningRoutineEditor(
+private fun MorningEditor(
     config: MorningConfig,
     completedIds: Set<String>,
-    progress: Float,
+    accentColor: Color,
     onWakeTimeChange: (LocalTime) -> Unit,
     onPhoneTimeChange: (LocalTime) -> Unit,
     onItemToggle: (ChecklistItem) -> Unit,
@@ -256,37 +425,45 @@ private fun MorningRoutineEditor(
     onRemoveItem: (ChecklistItem) -> Unit
 ) {
     var newItemText by remember { mutableStateOf("") }
-    val fmt = DateTimeFormatter.ofPattern("h:mm a")
 
-    // Time pickers
-    TimePickerRow("Wake time", config.wakeTime, onWakeTimeChange)
-    TimePickerRow("Phone available", config.phoneAvailableTime, onPhoneTimeChange)
-
-    Spacer(Modifier.height(12.dp))
-    Text("Checklist", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-    config.checklist.forEach { item ->
-        ChecklistEditorRow(
-            item = item,
-            checked = item.id in completedIds,
-            onToggle = { onItemToggle(item) },
-            onRemove = { onRemoveItem(item) }
-        )
+    EditorSection("Schedule") {
+        TimePickerRow("Wake time", config.wakeTime, accentColor, onWakeTimeChange)
+        Spacer(Modifier.height(4.dp))
+        TimePickerRow("Phone unlocks", config.phoneAvailableTime, accentColor, onPhoneTimeChange)
     }
 
-    AddItemRow(value = newItemText, onValueChange = { newItemText = it }, onAdd = {
-        if (newItemText.isNotBlank()) {
-            onAddItem(newItemText.trim())
-            newItemText = ""
+    if (config.checklist.isNotEmpty() || true) {
+        Spacer(Modifier.height(16.dp))
+        EditorSection("Checklist") {
+            config.checklist.forEach { item ->
+                ChecklistRow(
+                    item = item,
+                    checked = item.id in completedIds,
+                    accentColor = accentColor,
+                    onToggle = { onItemToggle(item) },
+                    onRemove = { onRemoveItem(item) }
+                )
+            }
+            AddItemRow(
+                value = newItemText,
+                onValueChange = { newItemText = it },
+                onAdd = {
+                    if (newItemText.isNotBlank()) { onAddItem(newItemText.trim()); newItemText = "" }
+                }
+            )
         }
-    })
+    }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Wind-down editor
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
-private fun WindDownRoutineEditor(
+private fun WindDownEditor(
     config: WindDownConfig,
     completedIds: Set<String>,
-    progress: Float,
+    accentColor: Color,
     onStartTimeChange: (LocalTime) -> Unit,
     onSleepTimeChange: (LocalTime) -> Unit,
     onDelayChange: (Int) -> Unit,
@@ -296,59 +473,138 @@ private fun WindDownRoutineEditor(
 ) {
     var newItemText by remember { mutableStateOf("") }
 
-    TimePickerRow("Wind-down starts", config.startTime, onStartTimeChange)
-    TimePickerRow("Sleep time", config.sleepTime, onSleepTimeChange)
-
-    Spacer(Modifier.height(12.dp))
-    Text("Extended friction delay", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    Spacer(Modifier.height(4.dp))
-
-    val delayOptions = listOf(10, 20, 30, 60)
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        delayOptions.forEach { secs ->
-            FilterChip(
-                selected = config.extendedDelaySeconds == secs,
-                onClick = { onDelayChange(secs) },
-                label = { Text("${secs}s") }
-            )
-        }
-    }
-
-    Spacer(Modifier.height(12.dp))
-    Text("Checklist", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-    config.checklist.forEach { item ->
-        ChecklistEditorRow(
-            item = item,
-            checked = item.id in completedIds,
-            onToggle = { onItemToggle(item) },
-            onRemove = { onRemoveItem(item) }
+    EditorSection("Schedule") {
+        TimePickerRow("Wind-down starts", config.startTime, accentColor, onStartTimeChange)
+        Spacer(Modifier.height(4.dp))
+        TimePickerRow("Sleep time", config.sleepTime, accentColor, onSleepTimeChange)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Sessions end automatically at sleep time.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 
-    AddItemRow(value = newItemText, onValueChange = { newItemText = it }, onAdd = {
-        if (newItemText.isNotBlank()) {
-            onAddItem(newItemText.trim())
-            newItemText = ""
+    Spacer(Modifier.height(16.dp))
+    EditorSection("Friction delay") {
+        Text(
+            "Extra wait before an app opens during wind-down.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(10, 20, 30, 60).forEach { secs ->
+                val selected = config.extendedDelaySeconds == secs
+                Surface(
+                    onClick = { onDelayChange(secs) },
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (selected) accentColor.copy(alpha = 0.14f)
+                            else MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 10.dp)) {
+                        Text(
+                            "${secs}s",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (selected) accentColor
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
         }
-    })
+    }
+
+    Spacer(Modifier.height(16.dp))
+    EditorSection("Checklist") {
+        config.checklist.forEach { item ->
+            ChecklistRow(
+                item = item,
+                checked = item.id in completedIds,
+                accentColor = accentColor,
+                onToggle = { onItemToggle(item) },
+                onRemove = { onRemoveItem(item) }
+            )
+        }
+        AddItemRow(
+            value = newItemText,
+            onValueChange = { newItemText = it },
+            onAdd = {
+                if (newItemText.isNotBlank()) { onAddItem(newItemText.trim()); newItemText = "" }
+            }
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared sub-components
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun EditorSection(label: String, content: @Composable ColumnScope.() -> Unit) {
+    Column {
+        Text(
+            label.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            letterSpacing = 0.8.sp
+        )
+        Spacer(Modifier.height(10.dp))
+        content()
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TimePickerRow(label: String, time: LocalTime, onChange: (LocalTime) -> Unit) {
+private fun TimePickerRow(
+    label: String,
+    time: LocalTime,
+    accentColor: Color,
+    onChange: (LocalTime) -> Unit
+) {
     var showPicker by remember { mutableStateOf(false) }
     val fmt = DateTimeFormatter.ofPattern("h:mm a")
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-        TextButton(onClick = { showPicker = true }) {
-            Text(time.format(fmt), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+
+        // Chip-style time button
+        Surface(
+            onClick = { showPicker = true },
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    Icons.Outlined.AccessTime,
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    time.format(fmt),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
         }
     }
 
@@ -376,9 +632,10 @@ private fun TimePickerRow(label: String, time: LocalTime, onChange: (LocalTime) 
 }
 
 @Composable
-private fun ChecklistEditorRow(
+private fun ChecklistRow(
     item: ChecklistItem,
     checked: Boolean,
+    accentColor: Color,
     onToggle: () -> Unit,
     onRemove: () -> Unit
 ) {
@@ -388,20 +645,34 @@ private fun ChecklistEditorRow(
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Checkbox(checked = checked, onCheckedChange = { onToggle() })
+        IconButton(
+            onClick = onToggle,
+            modifier = Modifier.size(36.dp)
+        ) {
+            Icon(
+                imageVector = if (checked) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
+                contentDescription = null,
+                tint = if (checked) accentColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                modifier = Modifier.size(20.dp)
+            )
+        }
         Text(
-            item.text,
+            text = item.text,
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.weight(1f),
-            color = if (checked) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-            else MaterialTheme.colorScheme.onSurface
+            color = if (checked) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                    else MaterialTheme.colorScheme.onSurface,
+            textDecoration = if (checked) TextDecoration.LineThrough else TextDecoration.None
         )
-        IconButton(onClick = onRemove) {
+        IconButton(
+            onClick = onRemove,
+            modifier = Modifier.size(32.dp)
+        ) {
             Icon(
-                Icons.Default.Delete,
+                Icons.Default.Close,
                 contentDescription = "Remove",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.size(18.dp)
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+                modifier = Modifier.size(15.dp)
             )
         }
     }
@@ -412,20 +683,41 @@ private fun AddItemRow(value: String, onValueChange: (String) -> Unit, onAdd: ()
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 8.dp),
+            .padding(top = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        OutlinedTextField(
+        IconButton(onClick = onAdd, modifier = Modifier.size(36.dp)) {
+            Icon(
+                Icons.Default.Add,
+                contentDescription = "Add",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        BasicTextField(
             value = value,
             onValueChange = onValueChange,
-            placeholder = { Text("Add item…") },
-            modifier = Modifier.weight(1f),
             singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                color = MaterialTheme.colorScheme.onSurface
+            ),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { onAdd() })
+            keyboardActions = KeyboardActions(onDone = { onAdd() }),
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 8.dp),
+            decorationBox = { inner ->
+                Box {
+                    if (value.isEmpty()) {
+                        Text(
+                            "Add a task…",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        )
+                    }
+                    inner()
+                }
+            }
         )
-        IconButton(onClick = onAdd) {
-            Icon(Icons.Default.Add, contentDescription = "Add")
-        }
     }
 }

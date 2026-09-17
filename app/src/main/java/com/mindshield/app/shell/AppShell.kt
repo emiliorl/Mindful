@@ -8,7 +8,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -61,9 +60,12 @@ fun AppShell() {
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
 
-    // On cold launch, go straight to the picker if no session is active
-    val session by ZoneManagerService.sessionState.collectAsStateWithLifecycle()
-    val startDestination = if (session == null) Routes.INTENT_PICKER else Routes.HOME
+    // Read start destination once at launch — must NOT be reactive.
+    // If startDestination changed on every session change, NavHost would recreate
+    // its graph and force-navigate to the new start on every session start/stop.
+    val startDestination = remember {
+        if (ZoneManagerService.sessionState.value == null) Routes.INTENT_PICKER else Routes.HOME
+    }
 
     // Hide the bottom nav on the picker screen
     val showBottomBar = currentRoute != Routes.INTENT_PICKER

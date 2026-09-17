@@ -6,6 +6,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.mindshield.app.data.RoutinePhase
 import com.mindshield.app.data.RoutineStore
 import com.mindshield.app.service.ZoneManagerService
 import java.util.concurrent.TimeUnit
@@ -15,6 +16,12 @@ class RoutineScheduler(ctx: Context, params: WorkerParameters) : CoroutineWorker
     override suspend fun doWork(): Result {
         val phase = RoutineStore.computePhase()
         ZoneManagerService.updateRoutinePhase(phase)
+
+        // Auto-end any active session when sleep mode begins
+        if (phase == RoutinePhase.SLEEP && ZoneManagerService.sessionState.value != null) {
+            applicationContext.startService(ZoneManagerService.stopIntent(applicationContext))
+        }
+
         return Result.success()
     }
 
