@@ -29,7 +29,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mindshield.app.data.AppFrictionStore
 import com.mindshield.app.data.FrictionMode
 import com.mindshield.app.data.IntentType
-import com.mindshield.app.util.AccessibilityServiceStatus
+import com.mindshield.app.util.PermissionStatus
 import com.mindshield.app.viewmodel.AppEntry
 import com.mindshield.app.viewmodel.AppsViewModel
 import kotlinx.coroutines.Dispatchers
@@ -41,31 +41,25 @@ import kotlinx.coroutines.withContext
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-fun AppsScreen() {
+fun AppsScreen(onOpenSettings: () -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
     // Re-check service status whenever the screen resumes (e.g. user returns
-    // from Android Accessibility settings after enabling the service).
-    var serviceEnabled by remember { mutableStateOf(AccessibilityServiceStatus.isEnabled(context)) }
+    // from the Settings tab after enabling the service).
+    var serviceEnabled by remember { mutableStateOf(PermissionStatus.isAccessibilityEnabled(context)) }
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.lifecycle.eventFlow
             .filterIsInstance<Lifecycle.Event>()
             .collect { event ->
                 if (event == Lifecycle.Event.ON_RESUME) {
-                    serviceEnabled = AccessibilityServiceStatus.isEnabled(context)
+                    serviceEnabled = PermissionStatus.isAccessibilityEnabled(context)
                 }
             }
     }
 
     if (!serviceEnabled) {
-        AccessibilityPermissionGate(
-            onOpenSettings = {
-                context.startActivity(
-                    android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                )
-            }
-        )
+        AccessibilityPermissionGate(onOpenSettings = onOpenSettings)
     } else {
         AppListContent()
     }
@@ -106,7 +100,7 @@ private fun AccessibilityPermissionGate(onOpenSettings: () -> Unit) {
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "In Accessibility settings, find MindShield and toggle it on.",
+            text = "Grant it from the Settings tab, then come back here.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -115,7 +109,7 @@ private fun AccessibilityPermissionGate(onOpenSettings: () -> Unit) {
         Button(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Outlined.OpenInNew, contentDescription = null)
             Spacer(Modifier.width(8.dp))
-            Text("Open Accessibility settings")
+            Text("Go to Settings")
         }
     }
 }

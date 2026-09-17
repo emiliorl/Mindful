@@ -1,8 +1,6 @@
 package com.mindshield.app.screens
 
 import android.content.Context
-import android.content.Intent
-import android.provider.Settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,7 +17,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.core.app.NotificationManagerCompat
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -30,6 +27,7 @@ import com.mindshield.app.data.BatchCategory
 import com.mindshield.app.data.BatchRule
 import com.mindshield.app.data.HeldNotification
 import com.mindshield.app.service.ZoneManagerService
+import com.mindshield.app.util.PermissionStatus
 import com.mindshield.app.viewmodel.AppEntry
 import com.mindshield.app.viewmodel.DeliveredBatch
 import com.mindshield.app.viewmodel.NotificationsViewModel
@@ -56,21 +54,23 @@ private val DELIVERY_PRESETS = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NotificationsScreen() {
+fun NotificationsScreen(onOpenSettings: () -> Unit) {
     val context        = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    var listenerEnabled by remember { mutableStateOf(isListenerEnabled(context)) }
+    var listenerEnabled by remember { mutableStateOf(PermissionStatus.isNotificationListenerEnabled(context)) }
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.lifecycle.eventFlow
             .filterIsInstance<Lifecycle.Event>()
             .collect { event ->
-                if (event == Lifecycle.Event.ON_RESUME) listenerEnabled = isListenerEnabled(context)
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    listenerEnabled = PermissionStatus.isNotificationListenerEnabled(context)
+                }
             }
     }
 
     if (!listenerEnabled) {
-        NotificationPermissionGate { context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
+        NotificationPermissionGate(onOpenSettings)
         return
     }
 
@@ -320,7 +320,7 @@ private fun NotificationPermissionGate(onOpenSettings: () -> Unit) {
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "In Notification access settings, find MindShield and toggle it on.",
+            "Grant it from the Settings tab, then come back here.",
             style     = MaterialTheme.typography.bodySmall,
             color     = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -329,7 +329,7 @@ private fun NotificationPermissionGate(onOpenSettings: () -> Unit) {
         Button(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Outlined.OpenInNew, contentDescription = null)
             Spacer(Modifier.width(8.dp))
-            Text("Open Notification access settings")
+            Text("Go to Settings")
         }
     }
 }
@@ -561,9 +561,6 @@ private fun EmptyRulesState() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
-
-private fun isListenerEnabled(context: Context): Boolean =
-    NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
 
 private fun relativeTime(ms: Long): String {
     val diff    = System.currentTimeMillis() - ms

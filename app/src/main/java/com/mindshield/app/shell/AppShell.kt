@@ -18,6 +18,7 @@ import com.mindshield.app.screens.HomeScreen
 import com.mindshield.app.screens.IntentPickerScreen
 import com.mindshield.app.screens.NotificationsScreen
 import com.mindshield.app.screens.RoutinesScreen
+import com.mindshield.app.screens.SettingsScreen
 import com.mindshield.app.screens.StatsScreen
 import com.mindshield.app.service.ZoneManagerService
 
@@ -32,6 +33,7 @@ private object Routes {
     const val NOTIFICATIONS = "notifications"
     const val STATS         = "stats"
     const val ROUTINES      = "routines"
+    const val SETTINGS      = "settings"
 }
 
 private sealed class Tab(
@@ -44,9 +46,10 @@ private sealed class Tab(
     object Notifications : Tab(Routes.NOTIFICATIONS, "Silence", Icons.Outlined.NotificationsOff)
     object Stats         : Tab(Routes.STATS,         "Stats",   Icons.Outlined.BarChart)
     object Routines      : Tab(Routes.ROUTINES,      "Routines",Icons.Outlined.WbTwilight)
+    object Settings      : Tab(Routes.SETTINGS,      "Settings",Icons.Outlined.Settings)
 
     companion object {
-        val all = listOf(Home, Apps, Notifications, Stats, Routines)
+        val all = listOf(Home, Apps, Notifications, Stats, Routines, Settings)
     }
 }
 
@@ -119,10 +122,23 @@ fun AppShell() {
                     }
                 )
             }
-            composable(Routes.APPS)          { AppsScreen() }
-            composable(Routes.NOTIFICATIONS) { NotificationsScreen() }
+            composable(Routes.APPS) {
+                AppsScreen(
+                    onOpenSettings = {
+                        navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
+                    }
+                )
+            }
+            composable(Routes.NOTIFICATIONS) {
+                NotificationsScreen(
+                    onOpenSettings = {
+                        navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
+                    }
+                )
+            }
             composable(Routes.STATS)         { StatsScreen() }
             composable(Routes.ROUTINES)      { RoutinesScreen() }
+            composable(Routes.SETTINGS)      { SettingsScreen() }
         }
     }
 }
