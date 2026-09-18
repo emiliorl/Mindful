@@ -7,10 +7,12 @@ import android.os.Build
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.mindshield.app.data.AccountabilityPartnerStore
 import com.mindshield.app.data.AppFrictionStore
 import com.mindshield.app.data.BatchRuleStore
 import com.mindshield.app.data.RoutineChecklistStore
 import com.mindshield.app.data.RoutineStore
+import com.mindshield.app.accountability.AccountabilityDigestWorker
 import com.mindshield.app.notification.BatchDeliveryWorker
 import com.mindshield.app.routines.RoutineScheduler
 import com.mindshield.app.service.ZoneManagerService
@@ -25,7 +27,9 @@ class MindShieldApp : Application() {
         BatchRuleStore.init(this)
         RoutineStore.init(this)
         RoutineChecklistStore.init(this)
+        AccountabilityPartnerStore.init(this)
         enqueueBatchWorker()
+        enqueueAccountabilityDigestWorker()
         RoutineScheduler.enqueue(this)
         // Compute current phase immediately on startup
         ZoneManagerService.updateRoutinePhase(RoutineStore.computePhase())
@@ -35,6 +39,15 @@ class MindShieldApp : Application() {
         val request = PeriodicWorkRequestBuilder<BatchDeliveryWorker>(1, TimeUnit.HOURS).build()
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
             "batch_delivery",
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
+    }
+
+    private fun enqueueAccountabilityDigestWorker() {
+        val request = PeriodicWorkRequestBuilder<AccountabilityDigestWorker>(1, TimeUnit.DAYS).build()
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "accountability_digest",
             ExistingPeriodicWorkPolicy.KEEP,
             request
         )
@@ -64,11 +77,22 @@ class MindShieldApp : Application() {
                     description = "Delivers your batched notifications"
                 }
             )
+
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_ACCOUNTABILITY,
+                    "Accountability Partner",
+                    NotificationManager.IMPORTANCE_DEFAULT
+                ).apply {
+                    description = "Accountability partner summaries ready to share"
+                }
+            )
         }
     }
 
     companion object {
         const val CHANNEL_SESSION = "mindshield_session"
         const val CHANNEL_BATCH  = "mindshield_batch"
+        const val CHANNEL_ACCOUNTABILITY = "mindshield_accountability"
     }
 }

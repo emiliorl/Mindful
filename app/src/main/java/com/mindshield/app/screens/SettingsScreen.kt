@@ -3,7 +3,9 @@ package com.mindshield.app.screens
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -24,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.eventFlow
+import com.mindshield.app.data.AccountabilityPartnerStore
 import com.mindshield.app.util.PermissionStatus
 import kotlinx.coroutines.flow.filterIsInstance
 
@@ -93,6 +96,17 @@ fun SettingsScreen() {
             }
     }
 
+    val partnerEmail by AccountabilityPartnerStore.partnerEmail.collectAsState()
+    val partnerEnabled by AccountabilityPartnerStore.enabled.collectAsState()
+    val triggerWeeklyDigest by AccountabilityPartnerStore.triggerWeeklyDigest.collectAsState()
+    val triggerSessionEnd by AccountabilityPartnerStore.triggerSessionEnd.collectAsState()
+    val triggerViolationAlert by AccountabilityPartnerStore.triggerViolationAlert.collectAsState()
+    val pendingShareLabel by AccountabilityPartnerStore.pendingShareLabel.collectAsState()
+    val pendingShareText by AccountabilityPartnerStore.pendingShareText.collectAsState()
+
+    var showSetupSheet by remember { mutableStateOf(false) }
+    var showShareSheet by remember { mutableStateOf(false) }
+
     Column(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Text(
@@ -124,6 +138,65 @@ fun SettingsScreen() {
             )
             HorizontalDivider()
         }
+
+        val accountabilitySubtitle = when {
+            pendingShareLabel != null -> "$pendingShareLabel ready to send"
+            partnerEmail.isBlank()    -> "Not set up"
+            else                      -> partnerEmail
+        }
+
+        AccountabilityPartnerRow(
+            subtitle    = accountabilitySubtitle,
+            highlighted = pendingShareLabel != null,
+            onClick     = {
+                if (pendingShareLabel != null) showShareSheet = true else showSetupSheet = true
+            }
+        )
+        HorizontalDivider()
+    }
+
+    if (showSetupSheet) {
+        AccountabilityPartnerSetupSheet(
+            partnerEmail           = partnerEmail,
+            enabled                = partnerEnabled,
+            triggerWeeklyDigest    = triggerWeeklyDigest,
+            triggerSessionEnd      = triggerSessionEnd,
+            triggerViolationAlert  = triggerViolationAlert,
+            onSave = { email, enabled, weekly, sessionEnd, violation ->
+                AccountabilityPartnerStore.setPartner(context, email, enabled, weekly, sessionEnd, violation)
+            },
+            onDismiss = { showSetupSheet = false }
+        )
+    }
+
+    if (showShareSheet && pendingShareLabel != null && pendingShareText != null) {
+        AccountabilityShareSheet(
+            label        = pendingShareLabel ?: "",
+            initialText  = pendingShareText ?: "",
+            partnerEmail = partnerEmail,
+            onSend = { editedText ->
+                val intent = Intent(Intent.ACTION_SENDTO).apply {
+                    data = Uri.parse("mailto:")
+                    putExtra(Intent.EXTRA_EMAIL, arrayOf(partnerEmail))
+                    putExtra(Intent.EXTRA_SUBJECT, "MindShield update — $pendingShareLabel")
+                    putExtra(Intent.EXTRA_TEXT, editedText)
+                }
+                if (intent.resolveActivity(context.packageManager) != null) {
+                    context.startActivity(intent)
+                } else {
+                    Toast.makeText(context, "No email app found", Toast.LENGTH_SHORT).show()
+                }
+                AccountabilityPartnerStore.clearPendingShare(context)
+            },
+            onDiscard = {
+                AccountabilityPartnerStore.clearPendingShare(context)
+            },
+            onEditSettings = {
+                showShareSheet = false
+                showSetupSheet = true
+            },
+            onDismiss = { showShareSheet = false }
+        )
     }
 }
 
@@ -179,6 +252,36 @@ private fun PermissionStatusRow(
             )
         } else {
             Button(onClick = onFix) { Text("Fix") }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Accountability Partner row
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun AccountabilityPartnerRow(
+    subtitle: String,
+    highlighted: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text("Accountability Partner", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (highlighted) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = if (highlighted) FontWeight.SemiBold else FontWeight.Normal
+            )
         }
     }
 }

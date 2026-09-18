@@ -4,6 +4,9 @@ import android.accessibilityservice.AccessibilityService
 import android.content.pm.PackageManager
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
+import com.mindshield.app.accountability.AccountabilityNotifier
+import com.mindshield.app.accountability.AccountabilitySummaryBuilder
+import com.mindshield.app.data.AccountabilityPartnerStore
 import com.mindshield.app.data.AppDatabase
 import com.mindshield.app.data.AppFrictionStore
 import com.mindshield.app.data.FrictionEvent
@@ -71,6 +74,7 @@ class MindShieldAccessibilityService : AccessibilityService() {
             onOpenAnyway = {
                 Log.d(TAG, "User opened $pkg anyway (phase=$routinePhase)")
                 logFrictionEvent(pkg, label, FrictionEvent.OUTCOME_OPENED)
+                maybeReportViolation(label)
                 bypassPackage = pkg
                 activeOverlay = null
                 overlayPackage = null
@@ -109,6 +113,16 @@ class MindShieldAccessibilityService : AccessibilityService() {
                     outcome     = outcome
                 )
             )
+        }
+    }
+
+    private fun maybeReportViolation(label: String) {
+        if (!AccountabilityPartnerStore.enabled.value || !AccountabilityPartnerStore.triggerViolationAlert.value) return
+        val sessionType = ZoneManagerService.sessionState.value?.type
+        CoroutineScope(Dispatchers.IO).launch {
+            val summary = AccountabilitySummaryBuilder.buildViolationSummary(label, sessionType)
+            AccountabilityPartnerStore.setPendingShare(applicationContext, "Opened $label anyway", summary)
+            AccountabilityNotifier.postPendingShareNotification(applicationContext, "Opened $label anyway")
         }
     }
 

@@ -17,6 +17,9 @@ import com.mindshield.app.data.RoutinePhase
 import com.mindshield.app.data.SessionStore
 import com.mindshield.app.data.AppDatabase
 import com.mindshield.app.data.CompletedSession
+import com.mindshield.app.data.AccountabilityPartnerStore
+import com.mindshield.app.accountability.AccountabilitySummaryBuilder
+import com.mindshield.app.accountability.AccountabilityNotifier
 import com.mindshield.app.notification.BatchDeliveryHelper
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -115,15 +118,20 @@ class ZoneManagerService : Service() {
                 val now = System.currentTimeMillis()
                 _sessionState.value?.let { prev ->
                     val ctx = this
+                    val completed = CompletedSession(
+                        intentType = prev.type.name,
+                        startMs    = prev.startTimeMs,
+                        endMs      = now,
+                        durationMs = now - prev.startTimeMs
+                    )
                     CoroutineScope(Dispatchers.IO).launch {
-                        AppDatabase.get(ctx).completedSessionDao().insert(
-                            CompletedSession(
-                                intentType = prev.type.name,
-                                startMs    = prev.startTimeMs,
-                                endMs      = now,
-                                durationMs = now - prev.startTimeMs
-                            )
-                        )
+                        AppDatabase.get(ctx).completedSessionDao().insert(completed)
+                        if (AccountabilityPartnerStore.enabled.value && AccountabilityPartnerStore.triggerSessionEnd.value) {
+                            val label = "${prev.type.label} session"
+                            val summary = AccountabilitySummaryBuilder.buildSessionSummary(completed)
+                            AccountabilityPartnerStore.setPendingShare(ctx, label, summary)
+                            AccountabilityNotifier.postPendingShareNotification(ctx, label)
+                        }
                     }
                 }
                 _sessionState.value = null
