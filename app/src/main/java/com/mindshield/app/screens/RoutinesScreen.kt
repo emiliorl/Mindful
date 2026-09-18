@@ -368,7 +368,7 @@ private fun RoutineCard(
                         trackColor = accentColor.copy(alpha = 0.14f)
                     )
                     Text(
-                        "${(progress * checklistTotal).toInt()}/$checklistTotal",
+                        "${(progress * checklistTotal).toInt()}/$checklistTotal item${if (checklistTotal == 1) "" else "s"}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

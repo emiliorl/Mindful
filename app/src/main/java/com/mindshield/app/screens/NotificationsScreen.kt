@@ -82,6 +82,7 @@ fun NotificationsScreen(onOpenSettings: () -> Unit) {
     val installedApps by vm.installedApps.collectAsStateWithLifecycle()
     val knownChannels by vm.knownChannels.collectAsStateWithLifecycle()
     val session       by ZoneManagerService.sessionState.collectAsStateWithLifecycle()
+    val queuedCount   by vm.queuedCount.collectAsStateWithLifecycle()
 
     var selectedRule: BatchRule? by remember { mutableStateOf(null) }
     var showAppPicker by remember { mutableStateOf(false) }
@@ -165,6 +166,10 @@ fun NotificationsScreen(onOpenSettings: () -> Unit) {
                     HorizontalDivider(modifier = Modifier.padding(start = 72.dp))
                 }
             }
+        }
+
+        if (queuedCount > 0) {
+            item { QueuedCountPreview(queuedCount) }
         }
 
         item { HorizontalDivider(modifier = Modifier.padding(top = 8.dp)) }
@@ -366,6 +371,33 @@ private fun BatchHeader(batch: DeliveredBatch) {
         Text(
             "· $count notification${if (count == 1) "" else "s"} from $appCount app${if (appCount == 1) "" else "s"}",
             style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Queued-count preview (currently held, waiting for the next delivery)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun QueuedCountPreview(count: Int) {
+    Row(
+        modifier          = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Outlined.HourglassEmpty,
+            contentDescription = null,
+            tint     = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            "$count notification${if (count == 1) "" else "s"} waiting for the next delivery.",
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }

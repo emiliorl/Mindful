@@ -48,6 +48,9 @@ interface HeldNotificationDao {
     @Query("SELECT COUNT(*) FROM held_notifications WHERE deliveredAtMs >= :fromMs AND deliveredAtMs <= :toMs")
     fun countDeliveredBetween(fromMs: Long, toMs: Long): kotlinx.coroutines.flow.Flow<Int>
 
+    @Query("SELECT COUNT(*) FROM held_notifications WHERE status = 'QUEUED'")
+    fun countQueued(): Flow<Int>
+
     // ── Cleanup ────────────────────────────────────────────────────────────────
 
     @Query("DELETE FROM held_notifications WHERE status = 'DELIVERED' AND deliveredAtMs < :olderThan")

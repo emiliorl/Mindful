@@ -317,5 +317,38 @@ private fun ActiveSessionContent(
                 }
             }
         }
+
+        item {
+            IntentNudgeCard(type = session.type)
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Intent nudge — ambient, low-emphasis encouragement tied to the active intent
+// ─────────────────────────────────────────────────────────────────────────────
+
+private fun IntentType.nudgeCopy(): String = when (this) {
+    IntentType.SOCIAL_MEDIA  -> "A quick check-in is fine — notice when it turns into a scroll."
+    IntentType.WORK          -> "Heads-down time. Everything else can wait."
+    IntentType.STUDY         -> "Small sessions add up. Keep going."
+    IntentType.FITNESS       -> "Away from the screen is the point — enjoy it."
+    IntentType.ENTERTAINMENT -> "Enjoy it — you chose this on purpose."
+    IntentType.JUST_LOOKING  -> "No agenda needed. Just notice what you reach for next."
+}
+
+@Composable
+private fun IntentNudgeCard(type: IntentType) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Text(
+            text = "${type.emoji} ${type.nudgeCopy()}",
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }

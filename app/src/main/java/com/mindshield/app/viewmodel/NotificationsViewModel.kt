@@ -34,6 +34,10 @@ class NotificationsViewModel(app: Application) : AndroidViewModel(app) {
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Number of notifications currently held, waiting for the next scheduled delivery. */
+    val queuedCount: StateFlow<Int> = dao.countQueued()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
     val rules: StateFlow<Map<String, BatchRule>> = BatchRuleStore.configs
 
     val globalSettings: StateFlow<GlobalBatchSettings> = BatchRuleStore.globalSettings

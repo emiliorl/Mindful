@@ -147,65 +147,89 @@ private fun BarChartCard(summary: StatsSummary) {
 private fun StackedBarChart(bars: List<DayBar>, modifier: Modifier = Modifier) {
     val maxMs = bars.maxOfOrNull { bar -> bar.byIntent.values.sum() }?.takeIf { it > 0 } ?: 1L
 
-    Row(
-        modifier              = modifier,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment     = Alignment.Bottom
-    ) {
-        bars.forEach { bar ->
-            val total = bar.byIntent.values.sum()
-            val fraction = total.toFloat() / maxMs
+    Column(modifier = modifier) {
+        // Bar area: baseline hairline layered behind the bars, both sharing the
+        // same bottom edge so the line lands exactly where bars (real or
+        // placeholder) end.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) {
+            // Baseline / zero gridline
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant)
+            )
 
-            Column(
-                modifier              = Modifier.weight(1f),
-                horizontalAlignment   = Alignment.CenterHorizontally,
-                verticalArrangement   = Arrangement.Bottom
+            Row(
+                modifier              = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment     = Alignment.Bottom
             ) {
-                // Stacked bar
-                if (total > 0) {
-                    val segments = bar.byIntent.entries
-                        .sortedBy { it.key.ordinal }
-                        .filter { it.value > 0 }
+                bars.forEach { bar ->
+                    val total = bar.byIntent.values.sum()
+                    val fraction = total.toFloat() / maxMs
 
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight(fraction)
-                            .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)),
-                        verticalArrangement = Arrangement.Bottom
-                    ) {
-                        segments.forEachIndexed { idx, (type, ms) ->
-                            val segFraction = ms.toFloat() / total
-                            val isTop = idx == segments.lastIndex
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(segFraction.coerceAtLeast(0.01f))
-                                    .background(
-                                        color = type.color(),
-                                        shape = if (isTop) RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp) else RoundedCornerShape(0.dp)
-                                    )
-                            )
+                    // Stacked bar
+                    if (total > 0) {
+                        val segments = bar.byIntent.entries
+                            .sortedBy { it.key.ordinal }
+                            .filter { it.value > 0 }
+
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight(fraction)
+                                .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)),
+                            verticalArrangement = Arrangement.Bottom
+                        ) {
+                            segments.forEachIndexed { idx, (type, ms) ->
+                                val segFraction = ms.toFloat() / total
+                                val isTop = idx == segments.lastIndex
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(segFraction.coerceAtLeast(0.01f))
+                                        .background(
+                                            color = type.color(),
+                                            shape = if (isTop) RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp) else RoundedCornerShape(0.dp)
+                                        )
+                                )
+                            }
                         }
+                    } else {
+                        // Empty bar placeholder
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                        )
                     }
-                } else {
-                    // Empty bar placeholder
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                    )
                 }
+            }
+        }
 
-                Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(4.dp))
+
+        // Day-of-week labels, aligned under their bars
+        Row(
+            modifier              = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            bars.forEach { bar ->
                 Text(
                     text      = bar.label,
                     fontSize  = 10.sp,
                     color     = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
-                    maxLines  = 1
+                    maxLines  = 1,
+                    modifier  = Modifier.weight(1f)
                 )
             }
         }
