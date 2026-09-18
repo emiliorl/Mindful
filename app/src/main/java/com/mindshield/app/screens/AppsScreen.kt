@@ -368,6 +368,13 @@ private fun AppRow(
             Column {
                 Spacer(Modifier.height(8.dp))
                 Text(
+                    text = "Smart mode only applies friction while a matching session below is active — it doesn't use time of day.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
                     text = "Pause during these sessions:",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

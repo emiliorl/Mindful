@@ -146,7 +146,7 @@ fun RoutinesScreen(vm: RoutinesViewModel = viewModel()) {
 private fun PhaseStatusBanner(phase: RoutinePhase) {
     val (emoji, title, sub, color) = when (phase) {
         RoutinePhase.MORNING   -> PhaseInfo("🌅", "Morning routine", "Phone unlocks when you finish.", MorningColor)
-        RoutinePhase.WIND_DOWN -> PhaseInfo("🌙", "Wind-down active", "Friction extended on all apps.", WindDownColor)
+        RoutinePhase.WIND_DOWN -> PhaseInfo("🌙", "Wind-down active", "Friction extended on apps with friction turned on.", WindDownColor)
         RoutinePhase.SLEEP     -> PhaseInfo("💤", "Sleep mode", "Apps are blocked until morning.", Color(0xFF64748B))
     }
     Surface(
@@ -488,7 +488,7 @@ private fun WindDownEditor(
     Spacer(Modifier.height(16.dp))
     EditorSection("Friction delay") {
         Text(
-            "Extra wait before an app opens during wind-down.",
+            "Extra wait before an app opens during wind-down. Only applies to apps with friction already turned on in the Apps tab — not a universal gate like Detox Day.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
