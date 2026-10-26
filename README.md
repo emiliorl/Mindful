@@ -10,13 +10,13 @@ View your app in AI Studio: https://ai.studio/apps/474426d8-e4c0-41e7-bb2e-4ae24
 
 ## Screenshots
 
-| Home | Apps | Silence |
+| Focus | Shield | Insights |
 |---|---|---|
-| ![Home screen](screenshots/home.png) | ![Apps screen](screenshots/apps.png) | ![Silence screen](screenshots/silence.png) |
+| ![Focus screen](screenshots/home.png) | ![Shield screen](screenshots/shield.png) | ![Insights screen](screenshots/insights.png) |
 
-| Stats | Routines | Settings |
-|---|---|---|
-| ![Stats screen](screenshots/stats.png) | ![Routines screen](screenshots/routines.png) | ![Settings screen](screenshots/settings.png) |
+| Daily routines | Settings |
+|---|---|
+| ![Routines screen](screenshots/routines.png) | ![Settings screen](screenshots/settings.png) |
 
 ## Run Locally
 
