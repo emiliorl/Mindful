@@ -13,6 +13,7 @@ import android.view.*
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 
@@ -229,10 +230,10 @@ class FrictionOverlay(
             setPadding((32 * d).toInt(), (56 * d).toInt(), (32 * d).toInt(), (48 * d).toInt())
         }
 
-        val moonEmoji = TextView(context).apply {
-            text = "🌙"
-            textSize = 64f
-            gravity = Gravity.CENTER
+        val moonIcon = ImageView(context).apply {
+            setImageResource(com.mindshield.app.R.drawable.ic_moon)
+            contentDescription = null
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }
 
         val titleLabel = TextView(context).apply {
@@ -294,7 +295,7 @@ class FrictionOverlay(
             setOnClickListener { dismiss(); onGoBack() }
         }
 
-        container.addView(moonEmoji)
+        container.addView(moonIcon)
         container.addView(titleLabel)
         container.addView(subtitleLabel)
         container.addView(spacer)

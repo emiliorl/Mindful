@@ -7,13 +7,18 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Accessibility
 import androidx.compose.material.icons.outlined.BatterySaver
-import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Group
+import androidx.compose.material.icons.rounded.WbTwilight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,10 +30,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.eventFlow
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mindshield.app.data.AccountabilityPartnerStore
+import com.mindshield.app.data.MorningConfig
+import com.mindshield.app.data.WindDownConfig
+import com.mindshield.app.ui.components.SectionHeader
 import com.mindshield.app.util.PermissionStatus
+import com.mindshield.app.viewmodel.RoutinesViewModel
 import kotlinx.coroutines.flow.filterIsInstance
+import java.time.format.DateTimeFormatter
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Permission row model
@@ -71,7 +83,7 @@ private enum class PermissionKind(
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(onOpenRoutines: () -> Unit = {}) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -107,23 +119,51 @@ fun SettingsScreen() {
     var showSetupSheet by remember { mutableStateOf(false) }
     var showShareSheet by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-            Text(
-                text = "Settings",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "Permissions MindShield needs to keep working. Android can revoke these on its own — fix any that fall out of grant here.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+    val routinesVm: RoutinesViewModel = viewModel()
+    val morning by routinesVm.morning.collectAsStateWithLifecycle()
+    val windDown by routinesVm.windDown.collectAsStateWithLifecycle()
+    val morningStreak by routinesVm.morningStreak.collectAsStateWithLifecycle()
+    val windDownStreak by routinesVm.windDownStreak.collectAsStateWithLifecycle()
 
-        HorizontalDivider()
+    val needAttention = statuses.values.count { !it }
 
-        PermissionKind.entries.forEach { kind ->
+    val accountabilitySubtitle = when {
+        pendingShareLabel != null -> "$pendingShareLabel ready to send"
+        partnerEmail.isBlank()    -> "Not set up"
+        else                      -> partnerEmail
+    }
+
+    val versionName = remember {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull()
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(bottom = 24.dp)
+    ) {
+        // ── Permissions & health ────────────────────────────────────────────
+        SectionHeader("Permissions & health")
+        Text(
+            text = if (needAttention == 0) "All set" else "$needAttention need attention",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = if (needAttention == 0) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)
+        )
+        Text(
+            text = "Android can revoke these on its own. Fix any that fall out of grant here.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+        )
+
+        PermissionKind.entries.forEachIndexed { index, kind ->
+            if (index > 0) HorizontalDivider(modifier = Modifier.padding(start = 72.dp))
             PermissionStatusRow(
                 kind = kind,
                 granted = statuses[kind] == true,
@@ -136,23 +176,49 @@ fun SettingsScreen() {
                     context.startActivity(intent)
                 }
             )
-            HorizontalDivider()
         }
 
-        val accountabilitySubtitle = when {
-            pendingShareLabel != null -> "$pendingShareLabel ready to send"
-            partnerEmail.isBlank()    -> "Not set up"
-            else                      -> partnerEmail
-        }
+        // ── Daily routines ──────────────────────────────────────────────────
+        Spacer(Modifier.height(8.dp))
+        SectionHeader("Daily routines")
+        SettingsNavRow(
+            icon = Icons.Rounded.WbTwilight,
+            title = "Morning & wind-down",
+            subtitle = routinesSummary(morning, windDown, maxOf(morningStreak, windDownStreak)),
+            onClick = onOpenRoutines
+        )
 
-        AccountabilityPartnerRow(
-            subtitle    = accountabilitySubtitle,
+        // ── Accountability Partner ──────────────────────────────────────────
+        Spacer(Modifier.height(8.dp))
+        SectionHeader("Accountability Partner")
+        SettingsNavRow(
+            icon = Icons.Rounded.Group,
+            title = "Accountability Partner",
+            subtitle = accountabilitySubtitle,
             highlighted = pendingShareLabel != null,
-            onClick     = {
+            onClick = {
                 if (pendingShareLabel != null) showShareSheet = true else showSetupSheet = true
             }
         )
-        HorizontalDivider()
+
+        // ── About ───────────────────────────────────────────────────────────
+        Spacer(Modifier.height(8.dp))
+        SectionHeader("About")
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+            Text(
+                text = "MindShield" + (versionName?.let { " $it" } ?: ""),
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "MindShield adds a moment of intention before you open an app. " +
+                    "It never blocks you; it simply asks you to pause and choose. " +
+                    "Everything it knows stays on this device.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 
     if (showSetupSheet) {
@@ -201,8 +267,26 @@ fun SettingsScreen() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Permission row
+// Rows
 // ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun IconCircle(icon: ImageVector) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.primaryContainer),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(22.dp),
+            tint = MaterialTheme.colorScheme.onPrimaryContainer
+        )
+    }
+}
 
 @Composable
 private fun PermissionStatusRow(
@@ -213,23 +297,11 @@ private fun PermissionStatusRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = kind.icon,
-                contentDescription = null,
-                modifier = Modifier.size(24.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-        }
+        IconCircle(kind.icon)
 
         Spacer(Modifier.width(16.dp))
 
@@ -246,35 +318,37 @@ private fun PermissionStatusRow(
 
         if (granted) {
             Icon(
-                Icons.Outlined.CheckCircle,
+                Icons.Rounded.Check,
                 contentDescription = "Granted",
                 tint = MaterialTheme.colorScheme.primary
             )
         } else {
-            Button(onClick = onFix) { Text("Fix") }
+            FilledTonalButton(onClick = onFix) { Text("Fix") }
         }
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Accountability Partner row
-// ─────────────────────────────────────────────────────────────────────────────
-
+/** Clickable row with a leading icon circle, title, subtitle and trailing chevron. */
 @Composable
-private fun AccountabilityPartnerRow(
+private fun SettingsNavRow(
+    icon: ImageVector,
+    title: String,
     subtitle: String,
-    highlighted: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    highlighted: Boolean = false
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 56.dp)
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        IconCircle(icon)
+        Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text("Accountability Partner", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
             Text(
                 subtitle,
                 style = MaterialTheme.typography.bodySmall,
@@ -283,5 +357,20 @@ private fun AccountabilityPartnerRow(
                 fontWeight = if (highlighted) FontWeight.SemiBold else FontWeight.Normal
             )
         }
+        Icon(
+            Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
+}
+
+private fun routinesSummary(morning: MorningConfig, windDown: WindDownConfig, streak: Int): String {
+    val fmt = DateTimeFormatter.ofPattern("h:mm a")
+    val parts = buildList {
+        if (morning.enabled) add("Morning ${morning.wakeTime.format(fmt)}")
+        if (windDown.enabled) add("Wind-down ${windDown.startTime.format(fmt)}")
+    }
+    val base = if (parts.isEmpty()) "Off" else parts.joinToString(" · ")
+    return if (streak > 0) "$base · $streak-day streak" else base
 }

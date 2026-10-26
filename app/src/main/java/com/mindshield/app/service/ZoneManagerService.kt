@@ -167,7 +167,7 @@ class ZoneManagerService : Service() {
         )
         val session = _sessionState.value
         val contentText = if (session != null)
-            "${session.type.emoji} ${session.type.label} session"
+            "${session.type.label} session"
         else
             "Idle"
 

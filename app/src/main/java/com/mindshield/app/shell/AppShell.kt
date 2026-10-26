@@ -1,26 +1,44 @@
 package com.mindshield.app.shell
 
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.outlined.Insights
+import androidx.compose.material.icons.outlined.SelfImprovement
+import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.rounded.LocalFireDepartment
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.mindshield.app.screens.AppsScreen
 import com.mindshield.app.screens.HomeScreen
+import com.mindshield.app.screens.InsightsScreen
 import com.mindshield.app.screens.IntentPickerScreen
-import com.mindshield.app.screens.NotificationsScreen
 import com.mindshield.app.screens.RoutinesScreen
 import com.mindshield.app.screens.SettingsScreen
-import com.mindshield.app.screens.StatsScreen
+import com.mindshield.app.screens.ShieldScreen
 import com.mindshield.app.service.ZoneManagerService
+import com.mindshield.app.viewmodel.RoutinesViewModel
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Routes
@@ -28,12 +46,11 @@ import com.mindshield.app.service.ZoneManagerService
 
 private object Routes {
     const val INTENT_PICKER = "intent_picker"
-    const val HOME          = "home"
-    const val APPS          = "apps"
-    const val NOTIFICATIONS = "notifications"
-    const val STATS         = "stats"
-    const val ROUTINES      = "routines"
+    const val FOCUS         = "focus"
+    const val SHIELD        = "shield"
+    const val INSIGHTS      = "insights"
     const val SETTINGS      = "settings"
+    const val ROUTINES      = "routines"
 }
 
 private sealed class Tab(
@@ -41,15 +58,30 @@ private sealed class Tab(
     val label: String,
     val icon: ImageVector
 ) {
-    object Home          : Tab(Routes.HOME,          "Home",    Icons.Outlined.Home)
-    object Apps          : Tab(Routes.APPS,          "Apps",    Icons.Outlined.Apps)
-    object Notifications : Tab(Routes.NOTIFICATIONS, "Silence", Icons.Outlined.NotificationsOff)
-    object Stats         : Tab(Routes.STATS,         "Stats",   Icons.Outlined.BarChart)
-    object Routines      : Tab(Routes.ROUTINES,      "Routines",Icons.Outlined.WbTwilight)
-    object Settings      : Tab(Routes.SETTINGS,      "Settings",Icons.Outlined.Settings)
+    object Focus    : Tab(Routes.FOCUS,    "Focus",    Icons.Outlined.SelfImprovement)
+    object Shield   : Tab(Routes.SHIELD,   "Shield",   Icons.Outlined.Shield)
+    object Insights : Tab(Routes.INSIGHTS, "Insights", Icons.Outlined.Insights)
 
     companion object {
-        val all = listOf(Home, Apps, Notifications, Stats, Routines, Settings)
+        val all = listOf(Focus, Shield, Insights)
+    }
+}
+
+/** Title for each non-picker route shown in the top bar. */
+private fun titleFor(route: String?): String = when (route) {
+    Routes.FOCUS    -> "Focus"
+    Routes.SHIELD   -> "Shield"
+    Routes.INSIGHTS -> "Insights"
+    Routes.SETTINGS -> "Settings"
+    Routes.ROUTINES -> "Daily routines"
+    else            -> "MindShield"
+}
+
+private fun NavHostController.navigateToTab(route: String) {
+    navigate(route) {
+        popUpTo(graph.findStartDestination().id) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
     }
 }
 
@@ -57,6 +89,7 @@ private sealed class Tab(
 // AppShell
 // ─────────────────────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppShell() {
     val navController = rememberNavController()
@@ -67,29 +100,66 @@ fun AppShell() {
     // If startDestination changed on every session change, NavHost would recreate
     // its graph and force-navigate to the new start on every session start/stop.
     val startDestination = remember {
-        if (ZoneManagerService.sessionState.value == null) Routes.INTENT_PICKER else Routes.HOME
+        if (ZoneManagerService.sessionState.value == null) Routes.INTENT_PICKER else Routes.FOCUS
     }
 
-    // Hide the bottom nav on the picker screen
-    val showBottomBar = currentRoute != Routes.INTENT_PICKER
+    val isTabRoute = Tab.all.any { it.route == currentRoute }
+    val isPushedRoute = currentRoute == Routes.SETTINGS || currentRoute == Routes.ROUTINES
+    val showTopBar = isTabRoute || isPushedRoute
+    val showBottomBar = isTabRoute
+
+    val routinesVm: RoutinesViewModel = viewModel()
+    val morningStreak by routinesVm.morningStreak.collectAsStateWithLifecycle()
+    val windDownStreak by routinesVm.windDownStreak.collectAsStateWithLifecycle()
+    val streak = maxOf(morningStreak, windDownStreak)
 
     Scaffold(
+        topBar = {
+            if (showTopBar) {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = titleFor(currentRoute),
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    },
+                    navigationIcon = {
+                        if (isPushedRoute) {
+                            IconButton(onClick = { navController.popBackStack() }) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                    contentDescription = "Back"
+                                )
+                            }
+                        }
+                    },
+                    actions = {
+                        if (isTabRoute) {
+                            if (streak > 0) StreakPill(streak)
+                            IconButton(onClick = {
+                                navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Settings,
+                                    contentDescription = "Settings"
+                                )
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background
+                    )
+                )
+            }
+        },
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {
                     Tab.all.forEach { tab ->
                         NavigationBarItem(
                             selected = currentRoute == tab.route,
-                            onClick = {
-                                navController.navigate(tab.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            icon = { Icon(imageVector = tab.icon, contentDescription = tab.label) },
+                            onClick = { navController.navigateToTab(tab.route) },
+                            icon = { Icon(imageVector = tab.icon, contentDescription = null) },
                             label = { Text(tab.label) }
                         )
                     }
@@ -107,38 +177,68 @@ fun AppShell() {
             composable(Routes.INTENT_PICKER) {
                 IntentPickerScreen(
                     onSessionStarted = {
-                        navController.navigate(Routes.HOME) {
+                        navController.navigate(Routes.FOCUS) {
                             popUpTo(Routes.INTENT_PICKER) { inclusive = true }
                         }
                     }
                 )
             }
-            composable(Routes.HOME) {
+            composable(Routes.FOCUS) {
                 HomeScreen(
                     onChangeIntent = {
-                        navController.navigate(Routes.INTENT_PICKER) {
-                            launchSingleTop = true
-                        }
-                    }
+                        navController.navigate(Routes.INTENT_PICKER) { launchSingleTop = true }
+                    },
+                    onOpenInsights = { navController.navigateToTab(Routes.INSIGHTS) }
                 )
             }
-            composable(Routes.APPS) {
-                AppsScreen(
+            composable(Routes.SHIELD) {
+                ShieldScreen(
                     onOpenSettings = {
                         navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
                     }
                 )
             }
-            composable(Routes.NOTIFICATIONS) {
-                NotificationsScreen(
-                    onOpenSettings = {
-                        navController.navigate(Routes.SETTINGS) { launchSingleTop = true }
+            composable(Routes.INSIGHTS) { InsightsScreen() }
+            composable(Routes.SETTINGS) {
+                SettingsScreen(
+                    onOpenRoutines = {
+                        navController.navigate(Routes.ROUTINES) { launchSingleTop = true }
                     }
                 )
             }
-            composable(Routes.STATS)         { StatsScreen() }
-            composable(Routes.ROUTINES)      { RoutinesScreen() }
-            composable(Routes.SETTINGS)      { SettingsScreen() }
+            composable(Routes.ROUTINES) { RoutinesScreen() }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Top-bar streak pill
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun StreakPill(days: Int) {
+    val label = if (days == 1) "1 day" else "$days days"
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        modifier = Modifier.semantics { contentDescription = "Routine streak: $label" }
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.LocalFireDepartment,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = "$days",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
+            )
         }
     }
 }

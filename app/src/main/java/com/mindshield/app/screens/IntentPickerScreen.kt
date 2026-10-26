@@ -6,7 +6,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -22,6 +24,8 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.mindshield.app.data.IntentType
 import com.mindshield.app.service.ZoneManagerService
+import com.mindshield.app.ui.theme.accent
+import com.mindshield.app.ui.theme.icon
 
 @Composable
 fun IntentPickerScreen(onSessionStarted: () -> Unit) {
@@ -93,7 +97,20 @@ private fun IntentTile(type: IntentType, onClick: () -> Unit) {
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = type.emoji, fontSize = 36.sp)
+            val accent = type.accent()
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .background(accent.copy(alpha = 0.14f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = type.icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(30.dp),
+                    tint = accent
+                )
+            }
             Spacer(Modifier.height(8.dp))
             Text(
                 text = type.label,

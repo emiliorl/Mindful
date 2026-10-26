@@ -7,13 +7,13 @@ import android.content.SharedPreferences
 // Intent types
 // ─────────────────────────────────────────────────────────────────────────────
 
-enum class IntentType(val label: String, val emoji: String) {
-    SOCIAL_MEDIA("Social Media", "📱"),
-    WORK("Work",               "💼"),
-    STUDY("Study",             "📚"),
-    FITNESS("Fitness",         "💪"),
-    ENTERTAINMENT("Entertainment", "🎬"),
-    JUST_LOOKING("Just Looking",   "👀");
+enum class IntentType(val label: String) {
+    SOCIAL_MEDIA("Social Media"),
+    WORK("Work"),
+    STUDY("Study"),
+    FITNESS("Fitness"),
+    ENTERTAINMENT("Entertainment"),
+    JUST_LOOKING("Just Looking");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

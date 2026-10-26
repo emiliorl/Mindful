@@ -18,12 +18,18 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.Circle
+import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.LocalFireDepartment
+import androidx.compose.material.icons.rounded.NightsStay
+import androidx.compose.material.icons.rounded.WbTwilight
 import androidx.compose.material3.*
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
@@ -41,7 +47,9 @@ import java.time.format.DateTimeFormatter
 
 // Per-routine accent colors
 private val MorningColor  = Color(0xFFF59E0B)  // warm amber
-private val WindDownColor = Color(0xFF6366F1)  // calm indigo
+// Muted slate-blue ("night") — deliberately not indigo, which read as lavender against the green theme.
+private val WindDownColor: Color
+    @Composable get() = if (isSystemInDarkTheme()) Color(0xFF8DB0D6) else Color(0xFF3F6188)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,22 +65,15 @@ fun RoutinesScreen(vm: RoutinesViewModel = viewModel()) {
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            Column {
-                Text(
-                    text = "Routines",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Build habits around your phone use.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text(
+                text = "Build habits around your phone use.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
         if (phase != null) {
@@ -85,7 +86,7 @@ fun RoutinesScreen(vm: RoutinesViewModel = viewModel()) {
 
         item {
             RoutineCard(
-                emoji = "🌅",
+                icon = Icons.Rounded.WbTwilight,
                 title = "Morning Routine",
                 description = "Lock phone until your morning tasks are done.",
                 accentColor = MorningColor,
@@ -110,7 +111,7 @@ fun RoutinesScreen(vm: RoutinesViewModel = viewModel()) {
 
         item {
             RoutineCard(
-                emoji = "🌙",
+                icon = Icons.Rounded.Bedtime,
                 title = "Wind-Down Routine",
                 description = "Increase friction and wind down before sleep.",
                 accentColor = WindDownColor,
@@ -144,10 +145,10 @@ fun RoutinesScreen(vm: RoutinesViewModel = viewModel()) {
 
 @Composable
 private fun PhaseStatusBanner(phase: RoutinePhase) {
-    val (emoji, title, sub, color) = when (phase) {
-        RoutinePhase.MORNING   -> PhaseInfo("🌅", "Morning routine", "Phone unlocks when you finish.", MorningColor)
-        RoutinePhase.WIND_DOWN -> PhaseInfo("🌙", "Wind-down active", "Friction extended on apps with friction turned on.", WindDownColor)
-        RoutinePhase.SLEEP     -> PhaseInfo("💤", "Sleep mode", "Apps are blocked until morning.", Color(0xFF64748B))
+    val (icon, title, sub, color) = when (phase) {
+        RoutinePhase.MORNING   -> PhaseInfo(Icons.Rounded.WbTwilight, "Morning routine", "Phone unlocks when you finish.", MorningColor)
+        RoutinePhase.WIND_DOWN -> PhaseInfo(Icons.Rounded.Bedtime, "Wind-down active", "Friction extended on apps with friction turned on.", WindDownColor)
+        RoutinePhase.SLEEP     -> PhaseInfo(Icons.Rounded.NightsStay, "Sleep mode", "Apps are blocked until morning.", Color(0xFF64748B))
     }
     Surface(
         shape = RoundedCornerShape(16.dp),
@@ -165,7 +166,7 @@ private fun PhaseStatusBanner(phase: RoutinePhase) {
                     .background(color.copy(alpha = 0.18f)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(emoji, fontSize = 20.sp)
+                Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp), tint = color)
             }
             Spacer(Modifier.width(14.dp))
             Column {
@@ -176,7 +177,7 @@ private fun PhaseStatusBanner(phase: RoutinePhase) {
     }
 }
 
-private data class PhaseInfo(val emoji: String, val title: String, val sub: String, val color: Color)
+private data class PhaseInfo(val icon: ImageVector, val title: String, val sub: String, val color: Color)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Day timeline
@@ -209,7 +210,7 @@ private fun DayTimeline(morning: MorningConfig, windDown: WindDownConfig, phase:
             ) {
                 if (morning.enabled) {
                     TimelineNode(
-                        emoji = "🌅",
+                        icon = Icons.Rounded.WbTwilight,
                         timeLabel = morning.wakeTime.format(fmt),
                         routineLabel = "Morning",
                         color = if (morningActive) MorningColor else MorningColor.copy(alpha = 0.45f),
@@ -232,7 +233,7 @@ private fun DayTimeline(morning: MorningConfig, windDown: WindDownConfig, phase:
 
                 if (windDown.enabled) {
                     TimelineNode(
-                        emoji = "🌙",
+                        icon = Icons.Rounded.Bedtime,
                         timeLabel = windDown.startTime.format(fmt),
                         routineLabel = "Wind-down",
                         color = if (eveningActive) WindDownColor else WindDownColor.copy(alpha = 0.45f),
@@ -246,7 +247,7 @@ private fun DayTimeline(morning: MorningConfig, windDown: WindDownConfig, phase:
 
 @Composable
 private fun TimelineNode(
-    emoji: String,
+    icon: ImageVector,
     timeLabel: String,
     routineLabel: String,
     color: Color,
@@ -260,7 +261,7 @@ private fun TimelineNode(
                 .background(color.copy(alpha = 0.18f)),
             contentAlignment = Alignment.Center
         ) {
-            Text(emoji, fontSize = 16.sp)
+            Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = color)
         }
         Spacer(Modifier.height(6.dp))
         Text(
@@ -283,7 +284,7 @@ private fun TimelineNode(
 
 @Composable
 private fun RoutineCard(
-    emoji: String,
+    icon: ImageVector,
     title: String,
     description: String,
     accentColor: Color,
@@ -306,7 +307,7 @@ private fun RoutineCard(
 
             // ── Header ──────────────────────────────────────────────────────
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Emoji icon
+                // Routine icon
                 Box(
                     modifier = Modifier
                         .size(48.dp)
@@ -314,7 +315,7 @@ private fun RoutineCard(
                         .background(accentColor.copy(alpha = 0.14f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(emoji, fontSize = 22.sp)
+                    Icon(icon, contentDescription = null, modifier = Modifier.size(26.dp), tint = accentColor)
                 }
 
                 Spacer(Modifier.width(14.dp))
@@ -398,13 +399,24 @@ private fun StreakBadge(streak: Int, accentColor: Color) {
         shape = CircleShape,
         color = accentColor.copy(alpha = 0.14f)
     ) {
-        Text(
-            text = "🔥 $streak",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = accentColor,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-        )
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Rounded.LocalFireDepartment,
+                contentDescription = null,
+                modifier = Modifier.size(12.dp),
+                tint = accentColor
+            )
+            Spacer(Modifier.width(3.dp))
+            Text(
+                text = "$streak",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = accentColor
+            )
+        }
     }
 }
 
@@ -488,7 +500,7 @@ private fun WindDownEditor(
     Spacer(Modifier.height(16.dp))
     EditorSection("Friction delay") {
         Text(
-            "Extra wait before an app opens during wind-down. Only applies to apps with friction already turned on in the Apps tab — not a universal gate like Detox Day.",
+            "Extra wait before an app opens during wind-down. Only applies to apps with friction already turned on in the Shield tab — not a universal gate like Detox Day.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

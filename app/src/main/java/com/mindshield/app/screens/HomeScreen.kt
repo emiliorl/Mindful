@@ -1,18 +1,36 @@
 package com.mindshield.app.screens
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.Inbox
+import androidx.compose.material.icons.rounded.NotificationsPaused
+import androidx.compose.material.icons.rounded.PauseCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -23,28 +41,24 @@ import com.mindshield.app.data.MorningConfig
 import com.mindshield.app.data.RoutinePhase
 import com.mindshield.app.data.WindDownConfig
 import com.mindshield.app.service.ZoneManagerService
+import com.mindshield.app.ui.theme.accent
+import com.mindshield.app.ui.theme.icon
 import com.mindshield.app.viewmodel.HomeViewModel
 import com.mindshield.app.viewmodel.RoutinesViewModel
 import com.mindshield.app.viewmodel.formatElapsed
+import com.mindshield.app.viewmodel.spokenElapsed
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
-// Shared intent → accent color (mirrors StatsScreen palette)
-internal fun IntentType.accentColor(): Color = when (this) {
-    IntentType.SOCIAL_MEDIA  -> Color(0xFFE57373)
-    IntentType.WORK          -> Color(0xFF64B5F6)
-    IntentType.STUDY         -> Color(0xFF81C784)
-    IntentType.FITNESS       -> Color(0xFFFFB74D)
-    IntentType.ENTERTAINMENT -> Color(0xFFBA68C8)
-    IntentType.JUST_LOOKING  -> Color(0xFF90A4AE)
-}
-
 @Composable
-fun HomeScreen(onChangeIntent: () -> Unit) {
+fun HomeScreen(onChangeIntent: () -> Unit, onOpenInsights: () -> Unit = {}) {
     val vm: HomeViewModel = viewModel()
     val routinesVm: RoutinesViewModel = viewModel()
     val session by vm.session.collectAsStateWithLifecycle()
     val elapsed by vm.elapsedSeconds.collectAsStateWithLifecycle()
+    val protectedCount by vm.protectedCount.collectAsStateWithLifecycle()
+    val batchDuringSession by vm.batchDuringSession.collectAsStateWithLifecycle()
+    val queuedCount by vm.queuedCount.collectAsStateWithLifecycle()
     val routinePhase by routinesVm.routinePhase.collectAsStateWithLifecycle()
     val morning by routinesVm.morning.collectAsStateWithLifecycle()
     val windDown by routinesVm.windDown.collectAsStateWithLifecycle()
@@ -57,6 +71,8 @@ fun HomeScreen(onChangeIntent: () -> Unit) {
         routinePhase == RoutinePhase.SLEEP -> SleepModeContent()
 
         session == null -> NoSessionContent(
+            queuedCount = queuedCount,
+            onOpenInsights = onOpenInsights,
             onStart = onChangeIntent,
             onQuickStart = { type ->
                 ContextCompat.startForegroundService(
@@ -68,8 +84,11 @@ fun HomeScreen(onChangeIntent: () -> Unit) {
 
         else -> ActiveSessionContent(
             session = session!!,
-            elapsed = elapsed.formatElapsed(),
-            routinePhase = routinePhase,
+            elapsedSeconds = elapsed,
+            protectedCount = protectedCount,
+            batchDuringSession = batchDuringSession,
+            queuedCount = queuedCount,
+            onOpenInsights = onOpenInsights,
             morningConfig = if (routinePhase == RoutinePhase.MORNING && morning.enabled) morning else null,
             windDownConfig = if (routinePhase == RoutinePhase.WIND_DOWN && windDown.enabled) windDown else null,
             completedIds = completedIds,
@@ -98,7 +117,12 @@ private fun SleepModeContent() {
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("🌙", fontSize = 64.sp)
+            Icon(
+                imageVector = Icons.Rounded.Bedtime,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
             Spacer(Modifier.height(16.dp))
             Text(
                 text = "Sleep mode",
@@ -122,6 +146,8 @@ private fun SleepModeContent() {
 
 @Composable
 private fun NoSessionContent(
+    queuedCount: Int,
+    onOpenInsights: () -> Unit,
     onStart: () -> Unit,
     onQuickStart: (IntentType) -> Unit
 ) {
@@ -136,7 +162,8 @@ private fun NoSessionContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp),
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -152,7 +179,7 @@ private fun NoSessionContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(Modifier.height(40.dp))
+        Spacer(Modifier.height(32.dp))
 
         // Quick-pick: the three most common intents
         Row(
@@ -160,7 +187,7 @@ private fun NoSessionContent(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             listOf(IntentType.WORK, IntentType.STUDY, IntentType.SOCIAL_MEDIA).forEach { type ->
-                QuickIntentChip(
+                QuickIntentTile(
                     type = type,
                     onClick = { onQuickStart(type) },
                     modifier = Modifier.weight(1f)
@@ -172,38 +199,190 @@ private fun NoSessionContent(
 
         TextButton(
             onClick = onStart,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
         ) {
             Text("See all intents")
+        }
+
+        if (queuedCount > 0) {
+            Spacer(Modifier.height(16.dp))
+            HeldPill(count = queuedCount, onClick = onOpenInsights)
         }
     }
 }
 
 @Composable
-private fun QuickIntentChip(
+private fun QuickIntentTile(
     type: IntentType,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val color = type.accentColor()
+    val accent = type.accent()
     Surface(
         onClick = onClick,
-        modifier = modifier,
+        modifier = modifier.heightIn(min = 48.dp),
         shape = RoundedCornerShape(16.dp),
-        color = color.copy(alpha = 0.14f),
-        contentColor = color
+        color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(
             modifier = Modifier.padding(vertical = 14.dp, horizontal = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(text = type.emoji, fontSize = 26.sp)
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .background(accent.copy(alpha = 0.14f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = type.icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = accent
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = type.label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared small pieces
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Count-only pill; the contents of the queue are never shown. */
+@Composable
+private fun HeldPill(count: Int, onClick: () -> Unit) {
+    val noun = if (count == 1) "notification" else "notifications"
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.heightIn(min = 48.dp),
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Inbox,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "$count $noun held for the next delivery",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatusChip(icon: ImageVector, text: String) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+/**
+ * Clock-style ring: sweeps one full revolution per hour. There is no target duration,
+ * so it conveys the passage of time rather than progress toward a goal.
+ */
+@Composable
+private fun TimerRing(type: IntentType, elapsedSeconds: Long, modifier: Modifier = Modifier) {
+    val accent = type.accent()
+    val trackColor = MaterialTheme.colorScheme.outlineVariant
+
+    // Animate a monotonically increasing angle so the 360 -> 0 wrap never spins backwards;
+    // the modulo is applied only when drawing.
+    val totalAngle by animateFloatAsState(
+        targetValue = elapsedSeconds / 3600f * 360f,
+        animationSpec = tween(durationMillis = 1000, easing = LinearEasing),
+        label = "timerRingAngle"
+    )
+    val sweep = totalAngle % 360f
+
+    val description = "${type.label}, ${elapsedSeconds.spokenElapsed()}"
+
+    Box(
+        modifier = modifier
+            .size(240.dp)
+            .clearAndSetSemantics { contentDescription = description },
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            val strokeWidth = 12.dp.toPx()
+            val inset = strokeWidth / 2f
+            val arcSize = Size(size.width - strokeWidth, size.height - strokeWidth)
+            drawCircle(
+                color = trackColor,
+                radius = (size.minDimension - strokeWidth) / 2f,
+                style = Stroke(width = strokeWidth)
+            )
+            if (sweep > 0f) {
+                drawArc(
+                    color = accent,
+                    startAngle = -90f,
+                    sweepAngle = sweep,
+                    useCenter = false,
+                    topLeft = Offset(inset, inset),
+                    size = arcSize,
+                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                )
+            }
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                imageVector = type.icon,
+                contentDescription = null,
+                modifier = Modifier.size(32.dp),
+                tint = accent
+            )
             Spacer(Modifier.height(4.dp))
             Text(
                 text = type.label,
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = elapsedSeconds.formatElapsed(),
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Light,
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
     }
@@ -213,11 +392,15 @@ private fun QuickIntentChip(
 // Active session
 // ─────────────────────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ActiveSessionContent(
     session: IntentSession,
-    elapsed: String,
-    routinePhase: RoutinePhase?,
+    elapsedSeconds: Long,
+    protectedCount: Int,
+    batchDuringSession: Boolean,
+    queuedCount: Int,
+    onOpenInsights: () -> Unit,
     morningConfig: MorningConfig?,
     windDownConfig: WindDownConfig?,
     completedIds: Set<String>,
@@ -229,47 +412,40 @@ private fun ActiveSessionContent(
     onEndSession: () -> Unit
 ) {
     val fmt = DateTimeFormatter.ofPattern("h:mm a")
-    val accentColor = session.type.accentColor()
+    var confirmEnd by remember { mutableStateOf(false) }
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 24.dp),
-        contentPadding = PaddingValues(vertical = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item {
-            // Session card tinted with the intent's accent color
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                color = accentColor.copy(alpha = 0.12f)
-            ) {
-                Column(
-                    modifier = Modifier.padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+    Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            TimerRing(type = session.type, elapsedSeconds = elapsedSeconds)
+
+            if (protectedCount > 0 || batchDuringSession) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(text = session.type.emoji, fontSize = 56.sp)
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = session.type.label,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = accentColor
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = elapsed,
-                        style = MaterialTheme.typography.displaySmall,
-                        fontWeight = FontWeight.Light,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    )
+                    if (protectedCount > 0) {
+                        val noun = if (protectedCount == 1) "app" else "apps"
+                        StatusChip(Icons.Rounded.PauseCircle, "Pause screen on · $protectedCount $noun")
+                    }
+                    if (batchDuringSession) {
+                        StatusChip(Icons.Rounded.NotificationsPaused, "Notifications held")
+                    }
                 }
             }
-        }
 
-        if (morningConfig != null) {
-            item {
+            if (queuedCount > 0) {
+                HeldPill(count = queuedCount, onClick = onOpenInsights)
+            }
+
+            if (morningConfig != null) {
                 MorningCard(
                     config = morningConfig,
                     completedIds = completedIds,
@@ -277,10 +453,8 @@ private fun ActiveSessionContent(
                     onItemToggle = onMorningItemToggle
                 )
             }
-        }
 
-        if (windDownConfig != null) {
-            item {
+            if (windDownConfig != null) {
                 WindDownCard(
                     startLabel = windDownConfig.startTime.format(fmt),
                     sleepLabel = windDownConfig.sleepTime.format(fmt),
@@ -292,35 +466,58 @@ private fun ActiveSessionContent(
                     onItemToggle = onWindDownItemToggle
                 )
             }
+
+            IntentNudgeCard(type = session.type)
         }
 
-        item {
-            // Buttons side-by-side instead of stacked
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilledTonalButton(
+                onClick = onChangeIntent,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
             ) {
-                OutlinedButton(
-                    onClick = onChangeIntent,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Change intent")
-                }
+                Text("Switch intent")
+            }
+            OutlinedButton(
+                onClick = { confirmEnd = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+            ) {
+                Text("End session")
+            }
+        }
+    }
+
+    if (confirmEnd) {
+        AlertDialog(
+            onDismissRequest = { confirmEnd = false },
+            title = { Text("End this session?") },
+            confirmButton = {
                 TextButton(
-                    onClick = onEndSession,
-                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        confirmEnd = false
+                        onEndSession()
+                    },
                     colors = ButtonDefaults.textButtonColors(
                         contentColor = MaterialTheme.colorScheme.error
                     )
-                ) {
-                    Text("End session")
-                }
+                ) { Text("End session") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmEnd = false }) { Text("Keep going") }
             }
-        }
-
-        item {
-            IntentNudgeCard(type = session.type)
-        }
+        )
     }
 }
 
@@ -345,7 +542,7 @@ private fun IntentNudgeCard(type: IntentType) {
         color = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Text(
-            text = "${type.emoji} ${type.nudgeCopy()}",
+            text = type.nudgeCopy(),
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
