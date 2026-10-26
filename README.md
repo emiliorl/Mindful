@@ -8,6 +8,16 @@ This contains everything you need to run your app locally.
 
 View your app in AI Studio: https://ai.studio/apps/474426d8-e4c0-41e7-bb2e-4ae24143a1cd
 
+## Screenshots
+
+| Home | Apps | Silence |
+|---|---|---|
+| ![Home screen](screenshots/home.png) | ![Apps screen](screenshots/apps.png) | ![Silence screen](screenshots/silence.png) |
+
+| Stats | Routines | Settings |
+|---|---|---|
+| ![Stats screen](screenshots/stats.png) | ![Routines screen](screenshots/routines.png) | ![Settings screen](screenshots/settings.png) |
+
 ## Run Locally
 
 **Prerequisites:**  [Android Studio](https://developer.android.com/studio)
